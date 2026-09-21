@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LSTM, GRU and TCN — a worked numerical walkthrough</title>
+<style>
+:root{
+  --bg:#faf9f5; --card:#ffffff; --ink:#1f1e1c; --ink2:#5f5e5a; --ink3:#888780;
+  --line:#e2e0d8; --line2:#c9c7bd;
+  --pu:#534ab7; --pu-bg:#eeedfe; --pu-ink:#3c3489;
+  --co:#993c1d; --co-bg:#faece7; --co-ink:#712b13;
+  --te:#0f6e56; --te-bg:#e1f5ee; --te-ink:#04342c;
+  --am:#854f0b; --am-bg:#faeeda;
+  --rd:#a32d2d; --rd-bg:#fcebeb;
+  --gy:#5f5e5a; --gy-bg:#f1efe8;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#191917; --card:#22221f; --ink:#eceae2; --ink2:#b4b2a9; --ink3:#888780;
+    --line:#35342f; --line2:#4a4944;
+    --pu:#afa9ec; --pu-bg:#3c3489; --pu-ink:#cecbf6;
+    --co:#f0997b; --co-bg:#712b13; --co-ink:#f5c4b3;
+    --te:#5dcaa5; --te-bg:#085041; --te-ink:#9fe1cb;
+    --am:#fac775; --am-bg:#633806;
+    --rd:#f09595; --rd-bg:#791f1f;
+    --gy:#b4b2a9; --gy-bg:#444441;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:400 16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1000px;margin:0 auto;padding:32px 20px 100px}
+h1{font-size:26px;font-weight:500;margin:0 0 6px}
+h2{font-size:20px;font-weight:500;margin:34px 0 10px}
+h3{font-size:16px;font-weight:500;margin:22px 0 8px}
+p{margin:0 0 12px;color:var(--ink)}
+.lede{color:var(--ink2);margin-bottom:26px}
+.muted{color:var(--ink2)}
+code,.mono{font-family:var(--mono);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:760px){.grid2,.grid4{grid-template-columns:1fr}}
+
+/* controls */
+.panel{position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--line);padding:14px 0 16px;margin-bottom:8px}
+.seqrow{display:flex;gap:3px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
+.cell{flex:1 0 auto;min-width:40px;height:52px;border:1px solid var(--line2);border-radius:6px;
+  background:var(--card);cursor:pointer;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:1px;font-family:var(--mono);font-size:11px;color:var(--ink3);
+  padding:0;transition:border-color .15s,background .15s}
+.cell b{font-size:13px;font-weight:500;color:var(--ink)}
+.cell.set{background:var(--te-bg);border-color:var(--te)}
+.cell.set b{color:var(--te-ink)}
+.cell.clr{background:var(--rd-bg);border-color:var(--rd)}
+.cell.clr b{color:var(--rd)}
+.cell.cur{outline:2px solid var(--pu);outline-offset:1px}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+button{font:inherit;font-size:13px;padding:6px 13px;border:1px solid var(--line2);
+  background:var(--card);color:var(--ink);border-radius:8px;cursor:pointer}
+button:hover{border-color:var(--ink3)}
+button:disabled{opacity:.4;cursor:default}
+button.pri{background:var(--pu-bg);border-color:var(--pu);color:var(--pu-ink)}
+.tabs{display:flex;gap:6px;margin:0 0 4px;flex-wrap:wrap}
+.tab{padding:7px 15px;border-radius:8px;border:1px solid transparent;background:transparent;
+  color:var(--ink2);cursor:pointer;font-size:14px}
+.tab.on{background:var(--card);border-color:var(--line);color:var(--ink)}
+.pane{display:none}
+.pane.on{display:block}
+
+/* gate cards */
+.gate{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--card)}
+.gate .nm{font-size:14px;font-weight:500;margin-bottom:2px}
+.gate .role{font-size:12.5px;color:var(--ink2);line-height:1.45;margin-bottom:10px;min-height:36px}
+.gate .calc{font-family:var(--mono);font-size:11.5px;color:var(--ink2);line-height:1.7;
+  word-break:break-word;margin-bottom:8px}
+.gate .val{font-family:var(--mono);font-size:19px;font-weight:500}
+.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:7px 0 8px}
+.meter i{display:block;height:100%;border-radius:3px}
+.gate .read{font-size:12.5px;line-height:1.45}
+.g-pu{border-color:var(--pu)} .g-pu .nm,.g-pu .val{color:var(--pu-ink)} .g-pu .meter i{background:var(--pu)}
+.g-co{border-color:var(--co)} .g-co .nm,.g-co .val{color:var(--co-ink)} .g-co .meter i{background:var(--co)}
+.g-te{border-color:var(--te)} .g-te .nm,.g-te .val{color:var(--te-ink)} .g-te .meter i{background:var(--te)}
+
+.eqbox{font-family:var(--mono);font-size:13px;line-height:2;background:var(--gy-bg);
+  border-radius:8px;padding:12px 14px;overflow-x:auto;white-space:pre}
+.hl{color:var(--pu);font-weight:500}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:500;color:var(--ink2);font-size:12.5px}
+td.n{font-family:var(--mono)}
+
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-family:var(--mono)}
+.p-on{background:var(--te-bg);color:var(--te-ink)}
+.p-off{background:var(--gy-bg);color:var(--ink2)}
+.p-un{background:var(--am-bg);color:var(--am)}
+.note{border-left:3px solid var(--am);background:var(--am-bg);padding:10px 14px;
+  border-radius:0 6px 6px 0;font-size:13.5px;margin:14px 0}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.ts{font-size:12px;fill:var(--ink2)}
+.tv{font-size:12px;fill:var(--ink);font-family:var(--mono)}
+.tn{font-size:13px;fill:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>LSTM, GRU and TCN — a worked numerical walkthrough</h1>
+<p class="lede">Every number below is computed live from hand-designed weights. Edit the input sequence, scrub to any timestep, and watch the arithmetic.</p>
+
+<h2>The task</h2>
+<p>The simplest problem that actually needs memory: <strong>a latch</strong>. At each timestep the network sees one of three things.</p>
+<div class="card">
+<table>
+<tr><th style="width:140px">Input</th><th style="width:150px">Encoding</th><th>Meaning</th></tr>
+<tr><td><span class="pill p-on">set</span></td><td class="n">[1, 0]</td><td>Turn the memory ON and keep it on.</td></tr>
+<tr><td><span class="pill p-off">clear</span></td><td class="n">[0, 1]</td><td>Turn the memory OFF.</td></tr>
+<tr><td><span class="pill p-off">hold</span></td><td class="n">[0, 0]</td><td>Nothing happens. Whatever was remembered must survive.</td></tr>
+</table>
+</div>
+<p>The network must output ≈1 while ON and ≈0 while OFF. It is trivial for a human and impossible for a feed-forward network on its own, because the correct answer at step 12 can depend on something that happened at step 1. That gap is exactly what these architectures exist to bridge.</p>
+<p class="muted">The weights here were <em>set by hand</em>, not trained, so the mechanism is visible rather than buried in a learned soup of numbers. A trained network would find different weights that do roughly the same thing.</p>
+
+<!-- ============ SHARED CONTROLS ============ -->
+<div class="panel">
+  <div class="seqrow" id="seqrow"></div>
+  <div class="bar">
+    <button id="prev">◀ Back</button>
+    <button id="next" class="pri">Step ▶</button>
+    <button id="play">Play</button>
+    <span class="mono" id="tlabel" style="color:var(--ink2)">t = 0</span>
+    <span style="flex:1"></span>
+    <span style="font-size:12.5px;color:var(--ink3)">presets:</span>
+    <button data-preset="default">long hold</button>
+    <button data-preset="toggle">rapid toggle</button>
+    <button data-preset="late">set at the very start</button>
+    <button data-preset="clearall">reset</button>
+  </div>
+  <div style="font-size:12.5px;color:var(--ink3);margin-top:8px">Click any cell to cycle it: hold → set → clear. Click a cell twice to jump there.</div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" data-pane="lstm">LSTM</button>
+  <button class="tab" data-pane="gru">GRU</button>
+  <button class="tab" data-pane="tcn">TCN</button>
+  <button class="tab" data-pane="cmp">Side by side</button>
+</div>
+
+<!-- ============================ LSTM ============================ -->
+<div class="pane on" id="pane-lstm">
+
+<h2>What c(t) and h(t) actually are</h2>
+<p>An LSTM carries <strong>two</strong> vectors from one timestep to the next. Nearly every confusion about LSTMs comes from collapsing them into one idea, so it is worth being precise.</p>
+
+<div class="grid2">
+<div class="card" style="border-color:var(--te)">
+<h3 style="margin-top:0;color:var(--te-ink)">c(t) — the cell state</h3>
+<p style="font-size:14.5px">The <strong>long-term memory</strong>, and the thing that makes an LSTM an LSTM. It is never passed through a weight matrix. The only two things that ever happen to it are: multiply element-wise by the forget gate, and add the gated candidate.</p>
+<div class="eqbox" style="font-size:12.5px">c(t) = f(t) · c(t−1) + i(t) · g(t)</div>
+<p style="font-size:13.5px;margin-top:12px" class="muted">Because the only path from c(t−1) to c(t) is a multiply by f and an add, the gradient flowing backwards is multiplied by f each step. If the network learns f ≈ 1 for a channel, the gradient reaches back hundreds of steps essentially intact. This is the "constant error carousel", and it is the whole reason LSTMs beat vanilla RNNs.</p>
+<p style="font-size:13.5px" class="muted">c is internal. Nothing outside the cell ever reads it directly.</p>
+</div>
+<div class="card" style="border-color:var(--gy)">
+<h3 style="margin-top:0">h(t) — the hidden state</h3>
+<p style="font-size:14.5px">The <strong>output</strong>, and also the short-term working memory. It is a <em>filtered view</em> of c(t): squashed into (−1, 1) by tanh, then masked by the output gate.</p>
+<div class="eqbox" style="font-size:12.5px">h(t) = o(t) · tanh(c(t))</div>
+<p style="font-size:13.5px;margin-top:12px" class="muted">h(t) is what the next layer sees, what the loss is computed on, and what gets fed back into all four gates at the next timestep. The split matters: the cell can hold a value for fifty steps while o keeps h(t) at zero the whole time, revealing it only when it becomes relevant.</p>
+<p style="font-size:13.5px" class="muted">In PyTorch, <code>output</code> is the sequence of h(t); <code>(h_n, c_n)</code> is the final pair.</p>
+</div>
+</div>
+
+<div class="note">Analogy that survives contact with the equations: <strong>c is the notebook, h is what you say out loud.</strong> The forget gate erases lines in the notebook, the input gate writes new ones, and the output gate decides how much of the notebook to read aloud this turn.</div>
+
+<h2>The cell at t = <span id="l-t">0</span></h2>
+<div class="card" style="padding:10px 12px">
+<svg width="100%" viewBox="0 0 680 450" role="img" aria-label="LSTM cell with live values on each wire">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+  <rect x="95" y="62" width="520" height="272" rx="20" fill="none" stroke="var(--line2)" stroke-width="1" stroke-dasharray="4 4"/>
+  <text class="ts" x="110" y="84">LSTM cell</text>
+
+  <line x1="40" y1="112" x2="162" y2="112" stroke="var(--te)" stroke-width="2.5"/>
+  <line x1="188" y1="112" x2="327" y2="112" stroke="var(--te)" stroke-width="2.5"/>
+  <line x1="353" y1="112" x2="640" y2="112" stroke="var(--te)" stroke-width="2.5" marker-end="url(#ar)"/>
+  <circle cx="175" cy="112" r="13" fill="var(--gy-bg)" stroke="var(--gy)" stroke-width=".8"/>
+  <text class="tn" x="175" y="112" text-anchor="middle" dominant-baseline="central">×</text>
+  <circle cx="340" cy="112" r="13" fill="var(--gy-bg)" stroke="var(--gy)" stroke-width=".8"/>
+  <text class="tn" x="340" y="112" text-anchor="middle" dominant-baseline="central">+</text>
+  <text class="ts" x="40" y="88">c(t−1)</text>
+  <text class="tv" x="40" y="72" id="sv-cprev">0.00</text>
+  <text class="ts" x="640" y="88" text-anchor="end">c(t)</text>
+  <text class="tv" x="640" y="72" text-anchor="end" id="sv-c">0.00</text>
+  <text class="tv" x="210" y="100" id="sv-cf">0.00</text>
+  <text class="tv" x="368" y="100" id="sv-write">+0.00</text>
+
+  <g><rect x="133" y="200" width="84" height="58" rx="8" fill="var(--pu-bg)" stroke="var(--pu)" stroke-width=".8"/>
+    <text class="ts" x="175" y="218" text-anchor="middle" dominant-baseline="central" style="fill:var(--pu-ink)">forget f</text>
+    <text x="175" y="240" text-anchor="middle" dominant-baseline="central" id="sv-f" style="font-family:var(--mono);font-size:15px;fill:var(--pu-ink)">0.00</text></g>
+  <line x1="175" y1="200" x2="175" y2="128" stroke="var(--pu)" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <g><rect x="243" y="200" width="84" height="58" rx="8" fill="var(--pu-bg)" stroke="var(--pu)" stroke-width=".8"/>
+    <text class="ts" x="285" y="218" text-anchor="middle" dominant-baseline="central" style="fill:var(--pu-ink)">input i</text>
+    <text x="285" y="240" text-anchor="middle" dominant-baseline="central" id="sv-i" style="font-family:var(--mono);font-size:15px;fill:var(--pu-ink)">0.00</text></g>
+  <path d="M285 200 V166 H327" fill="none" stroke="var(--pu)" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <g><rect x="353" y="200" width="84" height="58" rx="8" fill="var(--co-bg)" stroke="var(--co)" stroke-width=".8"/>
+    <text class="ts" x="395" y="218" text-anchor="middle" dominant-baseline="central" style="fill:var(--co-ink)">cand. g</text>
+    <text x="395" y="240" text-anchor="middle" dominant-baseline="central" id="sv-g" style="font-family:var(--mono);font-size:15px;fill:var(--co-ink)">0.00</text></g>
+  <path d="M395 200 V166 H353" fill="none" stroke="var(--co)" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <circle cx="340" cy="166" r="13" fill="var(--gy-bg)" stroke="var(--gy)" stroke-width=".8"/>
+  <text class="tn" x="340" y="166" text-anchor="middle" dominant-baseline="central">×</text>
+  <line x1="340" y1="153" x2="340" y2="128" stroke="var(--gy)" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <g><rect x="463" y="200" width="84" height="58" rx="8" fill="var(--pu-bg)" stroke="var(--pu)" stroke-width=".8"/>
+    <text class="ts" x="505" y="218" text-anchor="middle" dominant-baseline="central" style="fill:var(--pu-ink)">output o</text>
+    <text x="505" y="240" text-anchor="middle" dominant-baseline="central" id="sv-o" style="font-family:var(--mono);font-size:15px;fill:var(--pu-ink)">0.00</text></g>
+
+  <line x1="570" y1="112" x2="570" y2="139" stroke="var(--te)" stroke-width="1.5" marker-end="url(#ar)"/>
+  <rect x="535" y="142" width="70" height="38" rx="8" fill="var(--gy-bg)" stroke="var(--gy)" stroke-width=".8"/>
+  <text class="tn" x="570" y="161" text-anchor="middle" dominant-baseline="central">tanh</text>
+  <line x1="570" y1="180" x2="570" y2="276" stroke="var(--te)" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text class="tv" x="580" y="226" id="sv-tanhc">0.00</text>
+  <path d="M525 258 V292 H554" fill="none" stroke="var(--pu)" stroke-width="1.5" marker-end="url(#ar)"/>
+  <circle cx="570" cy="292" r="13" fill="var(--gy-bg)" stroke="var(--gy)" stroke-width=".8"/>
+  <text class="tn" x="570" y="292" text-anchor="middle" dominant-baseline="central">×</text>
+  <path d="M570 305 V350 H640" fill="none" stroke="var(--gy)" stroke-width="2.5" marker-end="url(#ar)"/>
+
+  <line x1="40" y1="350" x2="150" y2="350" stroke="var(--gy)" stroke-width="2.5"/>
+  <path d="M150 408 V314 H485" fill="none" stroke="var(--gy)" stroke-width="2.5"/>
+  <circle cx="150" cy="350" r="3" fill="var(--gy)"/>
+  <line x1="175" y1="314" x2="175" y2="264" stroke="var(--gy)" stroke-width="1.2" marker-end="url(#ar)"/>
+  <line x1="285" y1="314" x2="285" y2="264" stroke="var(--gy)" stroke-width="1.2" marker-end="url(#ar)"/>
+  <line x1="395" y1="314" x2="395" y2="264" stroke="var(--gy)" stroke-width="1.2" marker-end="url(#ar)"/>
+  <line x1="485" y1="314" x2="485" y2="264" stroke="var(--gy)" stroke-width="1.2" marker-end="url(#ar)"/>
+  <text class="ts" x="40" y="371">h(t−1)</text>
+  <text class="tv" x="40" y="388" id="sv-hprev">0.00</text>
+  <text class="ts" x="150" y="428" text-anchor="middle">x(t)</text>
+  <text class="tv" x="150" y="444" text-anchor="middle" id="sv-x">hold</text>
+  <text class="ts" x="640" y="371" text-anchor="end">h(t)</text>
+  <text class="tv" x="640" y="388" text-anchor="end" id="sv-h">0.00</text>
+</svg>
+</div>
+
+<h3>The four gates, computed</h3>
+<p class="muted" style="font-size:14px">Each gate takes the same input — the new x(t) glued to the previous h(t−1) — multiplies it by its own private weights, adds a bias, and squashes. σ squashes to (0, 1) so it reads as "what fraction to let through". tanh squashes to (−1, 1) so it reads as "a value to write".</p>
+<div class="grid4" id="l-gates"></div>
+
+<h3>Then two operations, and that is the whole cell</h3>
+<div class="grid2">
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:6px">1. Update the notebook</div>
+    <div class="eqbox" id="l-eq-c">…</div>
+    <p style="font-size:13px;margin:10px 0 0" class="muted" id="l-read-c"></p></div>
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:6px">2. Decide what to say out loud</div>
+    <div class="eqbox" id="l-eq-h">…</div>
+    <p style="font-size:13px;margin:10px 0 0" class="muted" id="l-read-h"></p></div>
+</div>
+
+<h3>c and h across the whole sequence</h3>
+<div class="card" style="padding:12px"><svg id="l-chart" width="100%" viewBox="0 0 760 190" role="img" aria-label="Cell state and hidden state over time"></svg></div>
+
+<h3>The weights being used</h3>
+<p class="muted" style="font-size:14px">One unit, so every weight is a scalar. <code>s</code> = set input, <code>k</code> = clear input, <code>h</code> = h(t−1).</p>
+<div class="card"><table>
+<tr><th>Gate</th><th>Pre-activation z</th><th>Squash</th><th>Designed behaviour</th></tr>
+<tr><td>forget f</td><td class="n">0·s − 10·k + 1·h + 5</td><td class="n">σ</td><td>≈1 normally, ≈0 only on <em>clear</em> — the one instruction that erases the notebook.</td></tr>
+<tr><td>input i</td><td class="n">10·s + 0·k − 2·h − 5</td><td class="n">σ</td><td>≈0 normally, opens on <em>set</em>. The −2·h means "if you already remember this, write less hard".</td></tr>
+<tr><td>candidate g</td><td class="n">3·s + 0·k + 0·h + 0</td><td class="n">tanh</td><td>≈+1 on <em>set</em>, 0 otherwise. This is the value being offered, not the decision to write it.</td></tr>
+<tr><td>output o</td><td class="n">0·s − 8·k + 0·h + 4</td><td class="n">σ</td><td>≈1 normally, slams to ≈0 on <em>clear</em> so h drops instantly rather than waiting for c to decay.</td></tr>
+</table></div>
+
+<div class="note">Notice what the trained-network version of this would look like: the same four numbers per gate, found by gradient descent instead of by hand, and totally unreadable. The mechanism is identical — <code>σ</code> producing keep-fractions, <code>tanh</code> producing candidate values, one multiply and one add on the cell state.</div>
+</div>
+
+<!-- ============================ GRU ============================ -->
+<div class="pane" id="pane-gru">
+
+<h2>The GRU: same job, one state, two gates</h2>
+<p>A GRU deletes the cell state entirely. There is only h(t), and it is both the memory and the output. To make that work it merges the forget and input gates into a single <strong>update gate</strong>, and adds a <strong>reset gate</strong> that controls how much of the past the candidate is allowed to see.</p>
+
+<div class="grid2">
+<div class="card" style="border-color:var(--gy)">
+<h3 style="margin-top:0">h(t) is now the only state</h3>
+<div class="eqbox" style="font-size:12.5px">h(t) = (1−z)·h(t−1) + z·h̃(t)</div>
+<p style="font-size:13.5px;margin-top:12px" class="muted">A <strong>convex blend</strong>. Whatever fraction of h(t−1) you keep is exactly the fraction of the candidate you don't take — one knob, not two. z ≈ 0 passes the old state through untouched, which is the additive skip path that keeps gradients alive. z ≈ 1 overwrites completely.</p>
+<p style="font-size:13.5px" class="muted">No output gate, so the full state is exposed every step. A GRU cannot hold something privately.</p>
+</div>
+<div class="card" style="border-color:var(--pu)">
+<h3 style="margin-top:0;color:var(--pu-ink)">The reset gate is the subtle one</h3>
+<div class="eqbox" style="font-size:12.5px">h̃(t) = tanh(W·x(t) + U·(r · h(t−1)))</div>
+<p style="font-size:13.5px;margin-top:12px" class="muted">r gates the <em>history fed into the candidate</em>, not the output. Setting r ≈ 0 lets the unit compute a fresh candidate as if the sequence were starting over — which is exactly how this network handles <em>clear</em>: reset the history to nothing, then overwrite with it.</p>
+<p style="font-size:13.5px" class="muted">This is why a GRU needs two gates rather than one: z alone can only interpolate towards the candidate, and the candidate itself is contaminated by the past unless r can cut it off.</p>
+</div>
+</div>
+
+<h2>The cell at t = <span id="g-t">0</span></h2>
+<div class="card" style="padding:10px 12px">
+<svg width="100%" viewBox="0 0 680 430" role="img" aria-label="GRU cell with live values">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+  <rect x="95" y="58" width="500" height="268" rx="20" fill="none" stroke="var(--line2)" stroke-width="1" stroke-dasharray="4 4"/>
+  <text class="ts" x="110" y="80">GRU cell</text>
+
+  <line x1="40" y1="116" x2="437" y2="116" stroke="var(--gy)" stroke-width="2.5" marker-end="url(#ar2)"/>
+  <circle cx="110" cy="116" r="3" fill="var(--gy)"/>
+  <circle cx="200" cy="116" r="3" fill="var(--gy)"/>
+  <text class="ts" x="40" y="94">h(t−1)</text>
+  <text class="tv" x="40" y="78" id="gv-hprev">0.00</text>
+
+  <path d="M110 116 V309 H530" fill="none" stroke="var(--gy)" stroke-width="2.5"/>
+  <path d="M150 386 V309" fill="none" stroke="var(--gy)" stroke-width="2.5"/>
+  <circle cx="150" cy="309" r="3" fill="var(--gy)"/>
+  <line x1="200" y1="309" x2="200" y2="296" stroke="var(--gy)" stroke-width="1.2" marker-end="url(#ar2)"/>
+  <line x1="350" y1="309" x2="350" y2="296" stroke="var(--gy)" stroke-width="1.2" marker-end="url(#ar2)"/>
+  <line x1="530" y1="309" x2="530" y2="296" stroke="var(--gy)" stroke-width="1.2" marker-end="url(#ar2)"/>
+  <text class="ts" x="150" y="406" text-anchor="middle">x(t)</text>
+  <text class="tv" x="150" y="422" text-anchor="middle" id="gv-x">hold</text>
+
+  <g><rect x="158" y="234" width="84" height="58" rx="8" fill="var(--pu-bg)" stroke="var(--pu)" stroke-width=".8"/>
+    <text class="ts" x="200" y="252" text-anchor="middle" dominant-baseline="central" style="fill:var(--pu-ink)">reset r</text>
+    <text x="200" y="274" text-anchor="middle" dominant-baseline="central" id="gv-r" style="font-family:var(--mono);font-size:15px;fill:var(--pu-ink)">0.00</text></g>
+  <g><rect x="488" y="234" width="84" height="58" rx="8" fill="var(--pu-bg)" stroke="var(--pu)" stroke-width=".8"/>
+    <text class="ts" x="530" y="252" text-anchor="middle" dominant-baseline="central" style="fill:var(--pu-ink)">update z</text>
+    <text x="530" y="274" text-anchor="middle" dominant-baseline="central" id="gv-z" style="font-family:var(--mono);font-size:15px;fill:var(--pu-ink)">0.00</text></g>
+
+  <line x1="200" y1="116" x2="200" y2="163" stroke="var(--gy)" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="200" y1="234" x2="200" y2="195" stroke="var(--pu)" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <circle cx="200" cy="179" r="13" fill="var(--gy-bg)" stroke="var(--gy)" stroke-width=".8"/>
+  <text class="tn" x="200" y="179" text-anchor="middle" dominant-baseline="central">×</text>
+  <path d="M213 179 H350 V231" fill="none" stroke="var(--co)" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <text class="tv" x="240" y="170" id="gv-rh">0.00</text>
+
+  <g><rect x="285" y="234" width="130" height="58" rx="8" fill="var(--co-bg)" stroke="var(--co)" stroke-width=".8"/>
+    <text class="ts" x="350" y="252" text-anchor="middle" dominant-baseline="central" style="fill:var(--co-ink)">candidate h̃ (tanh)</text>
+    <text x="350" y="274" text-anchor="middle" dominant-baseline="central" id="gv-cand" style="font-family:var(--mono);font-size:15px;fill:var(--co-ink)">0.00</text></g>
+
+  <path d="M415 262 H460 V145" fill="none" stroke="var(--co)" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <path d="M530 234 V145" fill="none" stroke="var(--pu)" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <rect x="440" y="90" width="160" height="52" rx="8" fill="var(--te-bg)" stroke="var(--te)" stroke-width=".8"/>
+  <text class="ts" x="520" y="108" text-anchor="middle" dominant-baseline="central" style="fill:var(--te-ink)">blend (1−z)·h + z·h̃</text>
+  <text x="520" y="128" text-anchor="middle" dominant-baseline="central" id="gv-blend" style="font-family:var(--mono);font-size:15px;fill:var(--te-ink)">0.00</text>
+  <line x1="600" y1="116" x2="640" y2="116" stroke="var(--gy)" stroke-width="2.5" marker-end="url(#ar2)"/>
+  <text class="ts" x="640" y="94" text-anchor="end">h(t)</text>
+  <text class="tv" x="640" y="78" text-anchor="end" id="gv-h">0.00</text>
+</svg>
+</div>
+
+<h3>The two gates and the candidate, computed</h3>
+<div class="grid4" id="g-gates"></div>
+
+<h3>The blend</h3>
+<div class="card"><div class="eqbox" id="g-eq">…</div>
+<p style="font-size:13px;margin:10px 0 0" class="muted" id="g-read"></p></div>
+
+<h3>h across the whole sequence</h3>
+<div class="card" style="padding:12px"><svg id="g-chart" width="100%" viewBox="0 0 760 190" role="img" aria-label="GRU hidden state over time"></svg></div>
+
+<h3>The weights being used</h3>
+<div class="card"><table>
+<tr><th>Gate</th><th>Pre-activation z</th><th>Squash</th><th>Designed behaviour</th></tr>
+<tr><td>reset r</td><td class="n">0·s − 10·k + 5</td><td class="n">σ</td><td>≈1 normally. On <em>clear</em> it collapses to ≈0, cutting the candidate off from all history.</td></tr>
+<tr><td>update z</td><td class="n">10·s + 10·k − 5</td><td class="n">σ</td><td>≈0 on <em>hold</em> (pass the old state straight through), ≈1 on either instruction (overwrite).</td></tr>
+<tr><td>candidate h̃</td><td class="n">3·s + 2·(r·h)</td><td class="n">tanh</td><td>≈+1 on <em>set</em>. On <em>clear</em>, r≈0 kills the history term so it evaluates to ≈0 — which z then writes in.</td></tr>
+</table></div>
+
+<div class="note">Compare the parameter counts. For hidden size <code>n</code> and input size <code>m</code>: LSTM = 4·(n+m+1)·n, GRU = 3·(n+m+1)·n. That 25% is the entire practical difference most of the time — on ordinary regression and classification the two are statistically indistinguishable, and hyperparameter tuning matters far more than the choice between them.</div>
+</div>
+
+<!-- ============================ TCN ============================ -->
+<div class="pane" id="pane-tcn">
+
+<h2>The TCN: no state at all</h2>
+<p>A temporal convolutional network throws out recurrence. There is no h, no c, nothing carried from step to step. Instead it stacks <strong>dilated causal convolutions</strong> and lets depth buy history.</p>
+
+<div class="grid2">
+<div class="card"><h3 style="margin-top:0">Causal</h3>
+<p style="font-size:14px">Pad only on the left by <code>(k−1)·d</code>, then truncate the right. The output at time t is then a function of inputs ≤ t and nothing else. For forecasting this is the constraint that stops the model quietly reading the future and looking brilliant in backtest.</p></div>
+<div class="card"><h3 style="margin-top:0">Dilated</h3>
+<p style="font-size:14px">Layer i skips <code>d_i = 2^i</code> positions between taps. Receptive field is <code>1 + (k−1)·Σd_i</code>, so it grows <em>exponentially</em> in depth. Three layers with k=2 reach back 8 steps; ten layers reach back 1,024.</p></div>
+</div>
+
+<p>Every timestep is computed in parallel — that is the speed advantage over an RNN, which must unroll sequentially. The cost is that memory is a hard window rather than a soft, in-principle-unbounded state.</p>
+
+<h3>The stack, with live values</h3>
+<p class="muted" style="font-size:14px">Each unit takes two inputs — itself and the one <code>d</code> steps to its left — and keeps whichever carries the more recent instruction. Green = ON, red = OFF, grey = no instruction seen yet.</p>
+<div class="card" style="padding:12px;overflow-x:auto">
+<svg id="t-grid" width="100%" viewBox="0 0 780 330" role="img" aria-label="Dilated causal convolution stack with live values"></svg>
+</div>
+
+<h3>How the output at t = <span id="tc-t">0</span> was built</h3>
+<div class="card"><div class="eqbox" id="t-eq">…</div>
+<p style="font-size:13px;margin:10px 0 0" class="muted" id="t-read"></p></div>
+
+<div class="card">
+<table>
+<tr><th style="width:200px">Receptive field</th><td class="n" id="t-rf">8 steps (t−7 … t)</td></tr>
+<tr><th>Last instruction in it</th><td class="n" id="t-last">—</td></tr>
+<tr><th>Output</th><td id="t-out">—</td></tr>
+<tr><th>Correct answer</th><td id="t-truth">—</td></tr>
+</table>
+</div>
+
+<div class="note">The demo block here is a simplified "keep the more recent instruction" operation rather than a literal weighted convolution, so the arithmetic stays readable. A real TCN residual block is: dilated causal conv → weight norm → ReLU → dropout, twice, plus a 1×1 conv on the skip path. It learns weights that approximate this kind of selection. The receptive-field arithmetic — the thing that actually matters when you size one — is exact.</div>
+
+<h3>Sizing one for real work</h3>
+<p>For 5-minute NEM dispatch data with kernel size 3, the receptive field is <code>2^(n+1) − 1</code> steps for n layers. Eight layers gives 511 steps ≈ 42 hours. You need ten for a full week. Compute this explicitly <em>before</em> training and check it covers the seasonality you care about — anything outside it is not "weakly remembered", it is structurally invisible.</p>
+</div>
+
+<!-- ============================ COMPARE ============================ -->
+<div class="pane" id="pane-cmp">
+<h2>All three at t = <span id="c-t">0</span></h2>
+<div class="card"><table>
+<tr><th style="width:130px">Model</th><th style="width:120px">Output</th><th style="width:110px">Reads as</th><th>State carried between steps</th></tr>
+<tr><td>LSTM</td><td class="n" id="c-lstm">—</td><td id="c-lstm-p">—</td><td class="muted">h(t) and c(t) — two vectors</td></tr>
+<tr><td>GRU</td><td class="n" id="c-gru">—</td><td id="c-gru-p">—</td><td class="muted">h(t) only</td></tr>
+<tr><td>TCN</td><td class="n" id="c-tcn">—</td><td id="c-tcn-p">—</td><td class="muted">none — recomputes from an 8-step window</td></tr>
+<tr><td>Truth</td><td class="n">—</td><td id="c-truth">—</td><td class="muted">the whole history</td></tr>
+</table></div>
+<div id="c-verdict"></div>
+
+<h2>When to reach for which</h2>
+<div class="card"><table>
+<tr><th style="width:150px"></th><th>LSTM</th><th>GRU</th><th>TCN</th></tr>
+<tr><td>Params / layer</td><td class="n">4(n+m+1)n</td><td class="n">3(n+m+1)n</td><td class="n">depends on channels</td></tr>
+<tr><td>Training</td><td>sequential unroll</td><td>sequential unroll</td><td>fully parallel</td></tr>
+<tr><td>Inference</td><td>O(1) per step</td><td>O(1) per step</td><td>re-convolve the window</td></tr>
+<tr><td>Memory horizon</td><td>soft, unbounded</td><td>soft, unbounded</td><td>hard cutoff at the RF</td></tr>
+<tr><td>Gradient path</td><td>additive via c</td><td>additive via (1−z)</td><td>through depth, not time</td></tr>
+<tr><td>Can hide state</td><td>yes (output gate)</td><td>no</td><td>n/a</td></tr>
+</table></div>
+
+<p>Practical default: <strong>try the GRU first</strong> — fewer parameters, faster, one word's difference in PyTorch (<code>nn.GRU</code> vs <code>nn.LSTM</code>, returning <code>(output, h_n)</code> rather than <code>(output, (h_n, c_n))</code>). Reach for the LSTM when sequences run past ~200 steps, when you have plenty of data, or when the task needs precise state-machine behaviour — LSTMs are provably stronger than GRUs on formal-language benchmarks because the output gate lets them hold a value while concealing it.</p>
+<p>Reach for the <strong>TCN</strong> when the series is long, regularly sampled, and you can name the horizon that matters. Size the receptive field deliberately, and remember that causal padding protects you inside the network but nothing protects you from a lagged feature or a scaler fit across the train/test boundary. That, not the architecture, is the most common silent bug in sequence forecasting code.</p>
+</div>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+var N=16, HOLD=0, SET=1, CLR=-1;
+var PRESETS={
+  "default":  function(){var a=z();a[2]=SET;a[11]=CLR;a[13]=SET;return a;},
+  "toggle":   function(){var a=z();a[1]=SET;a[3]=CLR;a[5]=SET;a[6]=CLR;a[8]=SET;a[12]=CLR;a[14]=SET;return a;},
+  "late":     function(){var a=z();a[0]=SET;return a;},
+  "clearall": function(){return z();}
+};
+function z(){var a=[],i;for(i=0;i<N;i++)a.push(HOLD);return a;}
+var seq=PRESETS["default"](), t=2, timer=null;
+
+function sig(x){return 1/(1+Math.exp(-x));}
+function f4(x){return (x<0?"":" ")+x.toFixed(4);}
+function f2(x){return x.toFixed(2);}
+function enc(v){return [v===SET?1:0, v===CLR?1:0];}
+function nameOf(v){return v===SET?"set":(v===CLR?"clear":"hold");}
+
+/* ---------- LSTM forward ---------- */
+var LW={Wf:[0,-10],Uf:1,bf:5, Wi:[10,0],Ui:-2,bi:-5, Wg:[3,0],Ug:0,bg:0, Wo:[0,-8],Uo:0,bo:4};
+function lstm(sq){
+  var c=0,h=0,out=[],i;
+  for(i=0;i<sq.length;i++){
+    var x=enc(sq[i]), cP=c, hP=h;
+    var zf=LW.Wf[0]*x[0]+LW.Wf[1]*x[1]+LW.Uf*hP+LW.bf, f=sig(zf);
+    var zi=LW.Wi[0]*x[0]+LW.Wi[1]*x[1]+LW.Ui*hP+LW.bi, ig=sig(zi);
+    var zg=LW.Wg[0]*x[0]+LW.Wg[1]*x[1]+LW.Ug*hP+LW.bg, g=Math.tanh(zg);
+    var zo=LW.Wo[0]*x[0]+LW.Wo[1]*x[1]+LW.Uo*hP+LW.bo, o=sig(zo);
+    var kept=f*cP, wrote=ig*g;
+    c=kept+wrote; var tc=Math.tanh(c); h=o*tc;
+    out.push({x:x,v:sq[i],cP:cP,hP:hP,zf:zf,f:f,zi:zi,i:ig,zg:zg,g:g,zo:zo,o:o,
+              kept:kept,wrote:wrote,c:c,tc:tc,h:h});
+  }
+  return out;
+}
+
+/* ---------- GRU forward ---------- */
+var GW={Wr:[0,-10],Ur:0,br:5, Wz:[10,10],Uz:0,bz:-5, Wh:[3,0],Uh:2,bh:0};
+function gru(sq){
+  var h=0,out=[],i;
+  for(i=0;i<sq.length;i++){
+    var x=enc(sq[i]), hP=h;
+    var zr=GW.Wr[0]*x[0]+GW.Wr[1]*x[1]+GW.Ur*hP+GW.br, r=sig(zr);
+    var zz=GW.Wz[0]*x[0]+GW.Wz[1]*x[1]+GW.Uz*hP+GW.bz, zg=sig(zz);
+    var rh=r*hP;
+    var zh=GW.Wh[0]*x[0]+GW.Wh[1]*x[1]+GW.Uh*rh+GW.bh, cand=Math.tanh(zh);
+    var keep=(1-zg)*hP, write=zg*cand;
+    h=keep+write;
+    out.push({x:x,v:sq[i],hP:hP,zr:zr,r:r,zz:zz,z:zg,rh:rh,zh:zh,cand:cand,
+              keep:keep,write:write,h:h});
+  }
+  return out;
+}
+
+/* ---------- TCN forward ---------- */
+var DIL=[1,2,4], RF=1+DIL[0]+DIL[1]+DIL[2];
+function tcn(sq){
+  var layers=[sq.slice()],L;
+  for(L=0;L<DIL.length;L++){
+    var d=DIL[L], prev=layers[L], cur=[],i;
+    for(i=0;i<N;i++){
+      var a=prev[i], b=(i-d>=0)?prev[i-d]:HOLD;
+      cur.push(a!==HOLD?a:b);
+    }
+    layers.push(cur);
+  }
+  return layers;
+}
+function truthAt(sq,i){var j;for(j=i;j>=0;j--){if(sq[j]!==HOLD)return sq[j];}return HOLD;}
+
+/* ---------- sequence editor ---------- */
+var row=document.getElementById("seqrow");
+function buildRow(){
+  row.innerHTML="";
+  for(var i=0;i<N;i++){
+    (function(i){
+      var b=document.createElement("button");
+      b.className="cell"; b.type="button";
+      b.innerHTML='<span>t'+i+'</span><b></b>';
+      b.onclick=function(){
+        if(t===i){seq[i]=seq[i]===HOLD?SET:(seq[i]===SET?CLR:HOLD);}
+        else{t=i;}
+        render();
+      };
+      row.appendChild(b);
+    })(i);
+  }
+}
+function paintRow(){
+  var kids=row.children,i;
+  for(i=0;i<N;i++){
+    var c=kids[i], v=seq[i];
+    c.className="cell"+(v===SET?" set":v===CLR?" clr":"")+(i===t?" cur":"");
+    c.lastChild.textContent=v===SET?"set":v===CLR?"clr":"·";
+  }
+}
+
+/* ---------- gate card renderer ---------- */
+function gateCard(cls,name,role,calc,val,lo,hi,reading){
+  var pct=Math.max(0,Math.min(1,(val-lo)/(hi-lo)))*100;
+  return '<div class="gate '+cls+'"><div class="nm">'+name+'</div>'+
+    '<div class="role">'+role+'</div>'+
+    '<div class="calc">'+calc+'</div>'+
+    '<div class="val">'+f4(val).trim()+'</div>'+
+    '<div class="meter"><i style="width:'+pct.toFixed(1)+'%"></i></div>'+
+    '<div class="read">'+reading+'</div></div>';
+}
+function pctTxt(v){return (v*100).toFixed(1)+"%";}
+
+/* ---------- chart ---------- */
+function chart(el,series,cur){
+  var W=760,H=190,L=44,R=16,T=16,B=34,iw=W-L-R,ih=H-T-B;
+  var lo=-0.1,hi=1.15;
+  function X(i){return L+(N<=1?0:i*iw/(N-1));}
+  function Y(v){return T+ih-((v-lo)/(hi-lo))*ih;}
+  var s='',i,k;
+  for(k=0;k<=4;k++){
+    var gv=k/4*1.0, y=Y(gv);
+    s+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'" stroke="var(--line)" stroke-width="1"/>';
+    s+='<text class="ts" x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end">'+gv.toFixed(2)+'</text>';
+  }
+  for(i=0;i<N;i++){
+    if(seq[i]!==HOLD){
+      s+='<line x1="'+X(i)+'" y1="'+T+'" x2="'+X(i)+'" y2="'+(T+ih)+'" stroke="'+
+         (seq[i]===SET?'var(--te)':'var(--rd)')+'" stroke-width="1" stroke-dasharray="3 3" opacity=".8"/>';
+    }
+    s+='<text class="ts" x="'+X(i)+'" y="'+(H-12)+'" text-anchor="middle" style="font-size:10px">'+i+'</text>';
+  }
+  s+='<line x1="'+X(cur)+'" y1="'+T+'" x2="'+X(cur)+'" y2="'+(T+ih)+'" stroke="var(--pu)" stroke-width="2" opacity=".35"/>';
+  for(k=0;k<series.length;k++){
+    var ser=series[k],p='';
+    for(i=0;i<N;i++){p+=(i?' L':'M')+X(i)+' '+Y(ser.v[i]);}
+    s+='<path d="'+p+'" fill="none" stroke="'+ser.c+'" stroke-width="2" stroke-linejoin="round"/>';
+    for(i=0;i<N;i++){s+='<circle cx="'+X(i)+'" cy="'+Y(ser.v[i])+'" r="'+(i===cur?4:2.2)+'" fill="'+ser.c+'"/>';}
+    s+='<text class="ts" x="'+(L+6+k*96)+'" y="'+(T-2)+'" style="fill:'+ser.c+'">'+ser.n+'</text>';
+  }
+  el.innerHTML=s;
+}
+
+/* ---------- TCN grid ---------- */
+function tgrid(el,layers,cur){
+  var YS=[275,205,135,65], names=["input","d = 1","d = 2","d = 4"];
+  function X(i){return 112+i*42;}
+  var s='',L,i;
+  for(L=0;L<4;L++){
+    s+='<text class="ts" x="8" y="'+(YS[L]+4)+'">'+names[L]+'</text>';
+  }
+  /* cone: ancestors of (3, cur) */
+  var cone={}; cone['3:'+cur]=1;
+  for(L=3;L>=1;L--){
+    for(i=0;i<N;i++){
+      if(cone[L+':'+i]){cone[(L-1)+':'+i]=1; if(i-DIL[L-1]>=0)cone[(L-1)+':'+(i-DIL[L-1])]=1;}
+    }
+  }
+  for(L=1;L<=3;L++){
+    var d=DIL[L-1];
+    for(i=0;i<N;i++){
+      var on=!!cone[L+':'+i];
+      var srcs=[i]; if(i-d>=0)srcs.push(i-d);
+      for(var q=0;q<srcs.length;q++){
+        s+='<line x1="'+X(srcs[q])+'" y1="'+YS[L-1]+'" x2="'+X(i)+'" y2="'+YS[L]+
+           '" stroke="'+(on?'var(--pu)':'var(--line2)')+'" stroke-width="'+(on?1.8:.7)+
+           '" opacity="'+(on?1:.35)+'"/>';
+      }
+    }
+  }
+  for(L=0;L<4;L++){
+    for(i=0;i<N;i++){
+      var v=layers[L][i], on2=!!cone[L+':'+i];
+      var fill=v===SET?'var(--te-bg)':v===CLR?'var(--rd-bg)':'var(--gy-bg)';
+      var strk=v===SET?'var(--te)':v===CLR?'var(--rd)':'var(--line2)';
+      s+='<circle cx="'+X(i)+'" cy="'+YS[L]+'" r="'+(on2?9:7)+'" fill="'+fill+
+         '" stroke="'+(on2?'var(--pu)':strk)+'" stroke-width="'+(on2?2:.8)+'"/>';
+    }
+  }
+  for(i=0;i<N;i++){s+='<text class="ts" x="'+X(i)+'" y="308" text-anchor="middle" style="font-size:10px">'+i+'</text>';}
+  s+='<text class="ts" x="'+X(cur)+'" y="50" text-anchor="middle">y(t)</text>';
+  el.innerHTML=s;
+}
+
+/* ---------- render ---------- */
+function render(){
+  paintRow();
+  document.getElementById("tlabel").textContent="t = "+t;
+  document.getElementById("prev").disabled=(t===0);
+  var i;
+  var ids=["l-t","g-t","tc-t","c-t"];
+  for(i=0;i<ids.length;i++){var e=document.getElementById(ids[i]); if(e)e.textContent=t;}
+
+  /* ---- LSTM ---- */
+  var LT=lstm(seq), s=LT[t], x=s.x;
+  document.getElementById("sv-cprev").textContent=f2(s.cP);
+  document.getElementById("sv-hprev").textContent=f2(s.hP);
+  document.getElementById("sv-c").textContent=f2(s.c);
+  document.getElementById("sv-h").textContent=f2(s.h);
+  document.getElementById("sv-cf").textContent=f2(s.kept);
+  document.getElementById("sv-write").textContent=(s.wrote>=0?"+":"")+f2(s.wrote);
+  document.getElementById("sv-tanhc").textContent=f2(s.tc);
+  document.getElementById("sv-f").textContent=f2(s.f);
+  document.getElementById("sv-i").textContent=f2(s.i);
+  document.getElementById("sv-g").textContent=f2(s.g);
+  document.getElementById("sv-o").textContent=f2(s.o);
+  document.getElementById("sv-x").textContent=nameOf(s.v);
+
+  var g1=gateCard("g-pu","forget &nbsp;f(t)",
+    "How much of the old cell state survives. Element-wise: 1 keeps that memory intact, 0 erases it.",
+    "z = 0·"+x[0]+" + (−10)·"+x[1]+" + 1·"+f4(s.hP).trim()+" + 5<br>&nbsp;&nbsp;= "+f4(s.zf).trim()+
+    "<br>f = σ("+f4(s.zf).trim()+")",
+    s.f,0,1, s.f>0.5?("Keeps <strong>"+pctTxt(s.f)+"</strong> of c(t−1).")
+                    :("Erases the notebook — only <strong>"+pctTxt(s.f)+"</strong> survives."));
+  var g2=gateCard("g-pu","input &nbsp;i(t)",
+    "How much of the candidate to actually write in. This is the decision, separate from the value.",
+    "z = 10·"+x[0]+" + 0·"+x[1]+" + (−2)·"+f4(s.hP).trim()+" + (−5)<br>&nbsp;&nbsp;= "+f4(s.zi).trim()+
+    "<br>i = σ("+f4(s.zi).trim()+")",
+    s.i,0,1, s.i>0.5?("Gate is <strong>open</strong> — writing "+pctTxt(s.i)+" of the candidate.")
+                    :("Gate is <strong>shut</strong> — nothing new is written."));
+  var g3=gateCard("g-co","candidate &nbsp;g(t)",
+    "The value being offered for storage. tanh, not σ, because this is a quantity to add — it may be negative.",
+    "z = 3·"+x[0]+" + 0·"+x[1]+" + 0·"+f4(s.hP).trim()+" + 0<br>&nbsp;&nbsp;= "+f4(s.zg).trim()+
+    "<br>g = tanh("+f4(s.zg).trim()+")",
+    s.g,-1,1, Math.abs(s.g)>0.5?("Offering <strong>"+f4(s.g).trim()+"</strong> to be written.")
+                               :("Offering ≈0 — nothing worth storing this step."));
+  var g4=gateCard("g-pu","output &nbsp;o(t)",
+    "Which parts of the cell state to expose as h(t). The cell can hold a value while o keeps it hidden.",
+    "z = 0·"+x[0]+" + (−8)·"+x[1]+" + 0·"+f4(s.hP).trim()+" + 4<br>&nbsp;&nbsp;= "+f4(s.zo).trim()+
+    "<br>o = σ("+f4(s.zo).trim()+")",
+    s.o,0,1, s.o>0.5?("Exposing <strong>"+pctTxt(s.o)+"</strong> of tanh(c).")
+                    :("Muted — h(t) is suppressed regardless of what c holds."));
+  document.getElementById("l-gates").innerHTML=g1+g2+g3+g4;
+
+  document.getElementById("l-eq-c").innerHTML=
+    "c(t) = f·c(t−1)      +  i·g\n"+
+    "     = "+f4(s.f).trim()+"·"+f4(s.cP).trim()+"  +  "+f4(s.i).trim()+"·"+f4(s.g).trim()+"\n"+
+    "     = "+f4(s.kept).trim()+"      +  "+f4(s.wrote).trim()+"\n"+
+    '     = <span class="hl">'+f4(s.c).trim()+"</span>";
+  document.getElementById("l-read-c").innerHTML=
+    "Carried forward: <strong>"+f4(s.kept).trim()+"</strong>. Newly written: <strong>"+f4(s.wrote).trim()+
+    "</strong>. Note there is no weight matrix anywhere on this line — that is what keeps the gradient alive.";
+  document.getElementById("l-eq-h").innerHTML=
+    "h(t) = o · tanh(c(t))\n"+
+    "     = "+f4(s.o).trim()+" · tanh("+f4(s.c).trim()+")\n"+
+    "     = "+f4(s.o).trim()+" · "+f4(s.tc).trim()+"\n"+
+    '     = <span class="hl">'+f4(s.h).trim()+"</span>";
+  document.getElementById("l-read-h").innerHTML=
+    "h saturates around 0.74 rather than 1.0 because tanh squashes c≈0.99 down to ≈0.76 first. "+
+    "The reading is <strong>"+(s.h>0.35?"ON":"OFF")+"</strong> — outputs are soft, and a real head would "+
+    "put a linear layer on top of this.";
+  chart(document.getElementById("l-chart"),
+    [{n:"c(t)",c:"var(--te)",v:LT.map(function(r){return r.c;})},
+     {n:"h(t)",c:"var(--pu)",v:LT.map(function(r){return r.h;})}], t);
+
+  /* ---- GRU ---- */
+  var GT=gru(seq), q=GT[t];
+  document.getElementById("gv-hprev").textContent=f2(q.hP);
+  document.getElementById("gv-h").textContent=f2(q.h);
+  document.getElementById("gv-r").textContent=f2(q.r);
+  document.getElementById("gv-z").textContent=f2(q.z);
+  document.getElementById("gv-rh").textContent=f2(q.rh);
+  document.getElementById("gv-cand").textContent=f2(q.cand);
+  document.getElementById("gv-blend").textContent=f2(q.h);
+  document.getElementById("gv-x").textContent=nameOf(q.v);
+
+  var k1=gateCard("g-pu","reset &nbsp;r(t)",
+    "How much of h(t−1) the candidate is allowed to see. Nothing to do with the output.",
+    "z = 0·"+q.x[0]+" + (−10)·"+q.x[1]+" + 5 = "+f4(q.zr).trim()+"<br>r = σ("+f4(q.zr).trim()+")",
+    q.r,0,1, q.r>0.5?("Candidate sees <strong>"+pctTxt(q.r)+"</strong> of the history.")
+                    :("History cut off — the candidate starts from scratch."));
+  var k2=gateCard("g-pu","update &nbsp;z(t)",
+    "The single knob doing the LSTM's forget and input jobs at once, as a convex blend.",
+    "z = 10·"+q.x[0]+" + 10·"+q.x[1]+" − 5 = "+f4(q.zz).trim()+"<br>z = σ("+f4(q.zz).trim()+")",
+    q.z,0,1, q.z>0.5?("Overwriting <strong>"+pctTxt(q.z)+"</strong> of the state.")
+                    :("Holding — <strong>"+pctTxt(1-q.z)+"</strong> of h(t−1) passes straight through."));
+  var k3=gateCard("g-co","candidate &nbsp;h̃(t)",
+    "The proposed new state, built from the new input plus the reset-filtered history.",
+    "r·h = "+f4(q.r).trim()+"·"+f4(q.hP).trim()+" = "+f4(q.rh).trim()+
+    "<br>z = 3·"+q.x[0]+" + 2·"+f4(q.rh).trim()+" = "+f4(q.zh).trim()+
+    "<br>h̃ = tanh("+f4(q.zh).trim()+")",
+    q.cand,-1,1, Math.abs(q.cand)>0.5?("Proposing <strong>"+f4(q.cand).trim()+"</strong>.")
+                                     :("Proposing ≈0 — which on a clear step is exactly right."));
+  var k4='<div class="gate g-te"><div class="nm">blend &nbsp;h(t)</div>'+
+    '<div class="role">One convex combination. The fraction kept and the fraction written always sum to 1.</div>'+
+    '<div class="calc">(1−z)·h = '+f4(1-q.z).trim()+'·'+f4(q.hP).trim()+' = '+f4(q.keep).trim()+
+    '<br>z·h̃ &nbsp;&nbsp;&nbsp;= '+f4(q.z).trim()+'·'+f4(q.cand).trim()+' = '+f4(q.write).trim()+'</div>'+
+    '<div class="val">'+f4(q.h).trim()+'</div>'+
+    '<div class="meter"><i style="width:'+(Math.max(0,Math.min(1,q.h))*100).toFixed(1)+'%"></i></div>'+
+    '<div class="read">Reads as <strong>'+(q.h>0.5?"ON":"OFF")+'</strong>.</div></div>';
+  document.getElementById("g-gates").innerHTML=k1+k2+k3+k4;
+
+  document.getElementById("g-eq").innerHTML=
+    "h(t) = (1−z)·h(t−1)   +  z·h̃(t)\n"+
+    "     = "+f4(1-q.z).trim()+"·"+f4(q.hP).trim()+"     +  "+f4(q.z).trim()+"·"+f4(q.cand).trim()+"\n"+
+    "     = "+f4(q.keep).trim()+"      +  "+f4(q.write).trim()+"\n"+
+    '     = <span class="hl">'+f4(q.h).trim()+"</span>";
+  document.getElementById("g-read").innerHTML=
+    "Unlike the LSTM there is no tanh on the way out, so h reaches ≈0.99 rather than ≈0.74. "+
+    "Also unlike the LSTM, the two coefficients are forced to sum to 1 — a GRU cannot add to its state "+
+    "without forgetting an equal amount, and cannot forget without writing. That is the one real capability "+
+    "the extra LSTM gate buys.";
+  chart(document.getElementById("g-chart"),
+    [{n:"h(t)",c:"var(--pu)",v:GT.map(function(r){return r.h;})},
+     {n:"z(t)",c:"var(--am)",v:GT.map(function(r){return r.z;})}], t);
+
+  /* ---- TCN ---- */
+  var TL=tcn(seq);
+  tgrid(document.getElementById("t-grid"),TL,t);
+  var lines=[], lo=Math.max(0,t-RF+1);
+  lines.push("receptive field = 1 + 1 + 2 + 4 = "+RF+" steps   (t−"+(RF-1)+" … t)");
+  lines.push("");
+  for(var L=1;L<=3;L++){
+    var d=DIL[L-1], a=TL[L-1][t], b=(t-d>=0)?TL[L-1][t-d]:HOLD;
+    lines.push("layer "+L+"  (d="+d+"):  keep_recent( "+nameOf(a)+" @t , "+nameOf(b)+" @t−"+d+" )  →  "+nameOf(TL[L][t]));
+  }
+  lines.push("");
+  lines.push("y("+t+") = "+nameOf(TL[3][t]));
+  document.getElementById("t-eq").textContent=lines.join("\n");
+  var last=HOLD, li=-1;
+  for(var j=t;j>=lo;j--){if(seq[j]!==HOLD){last=seq[j];li=j;break;}}
+  document.getElementById("t-rf").textContent=RF+" steps — indices "+lo+"–"+t+
+    (lo===0&&t<RF-1?"  (truncated: the sequence has not run long enough to fill it)":"");
+  document.getElementById("t-last").textContent=li<0?"none — the window is empty":(nameOf(last)+" at t"+li+" ("+(t-li)+" steps back)");
+  var tv=TL[3][t], tr=truthAt(seq,t);
+  document.getElementById("t-out").innerHTML=
+    tv===SET?'<span class="pill p-on">ON</span>':tv===CLR?'<span class="pill p-off">OFF</span>':
+    '<span class="pill p-un">unknown — nothing in the window</span>';
+  document.getElementById("t-truth").innerHTML=
+    tr===SET?'<span class="pill p-on">ON</span>':'<span class="pill p-off">OFF</span>';
+  document.getElementById("t-read").innerHTML= (tv===tr||(tv===HOLD&&tr===HOLD))
+    ? "The last instruction fell inside the receptive field, so the TCN gets it right."
+    : "<strong>"+(li<0?"No instruction falls inside the "+RF+"-step window at all":
+        "The last instruction is outside the "+RF+"-step window")+", so the TCN cannot see it.</strong> "+
+      "It is not weakly remembering — the information is structurally absent from its input. Adding layers is the only fix.";
+
+  /* ---- compare ---- */
+  var tr2=truthAt(seq,t);
+  document.getElementById("c-lstm").textContent=f4(s.h).trim();
+  document.getElementById("c-gru").textContent=f4(q.h).trim();
+  document.getElementById("c-tcn").textContent=tv===SET?"+1":tv===CLR?"−1":"0";
+  function pil(on){return on?'<span class="pill p-on">ON</span>':'<span class="pill p-off">OFF</span>';}
+  document.getElementById("c-lstm-p").innerHTML=pil(s.h>0.35);
+  document.getElementById("c-gru-p").innerHTML=pil(q.h>0.5);
+  document.getElementById("c-tcn-p").innerHTML= tv===HOLD?'<span class="pill p-un">unknown</span>':pil(tv===SET);
+  document.getElementById("c-truth").innerHTML=pil(tr2===SET);
+  var lOK=(s.h>0.35)===(tr2===SET), gOK=(q.h>0.5)===(tr2===SET),
+      tOK=(tv!==HOLD)&&((tv===SET)===(tr2===SET));
+  document.getElementById("c-verdict").innerHTML= (lOK&&gOK&&tOK)
+    ? '<div class="note" style="border-color:var(--te);background:var(--te-bg)">All three agree with the truth at this step.</div>'
+    : '<div class="note"><strong>'+
+      (!tOK?"The TCN is wrong or undecided here. ":"")+
+      (!lOK?"The LSTM is wrong here. ":"")+(!gOK?"The GRU is wrong here. ":"")+
+      '</strong>Try the "set at the very start" preset and scrub to t=10 or later — the recurrent models still remember, the TCN has run out of window.</div>';
+}
+
+/* ---------- wiring ---------- */
+document.getElementById("next").onclick=function(){t=(t+1)%N;render();};
+document.getElementById("prev").onclick=function(){if(t>0){t--;render();}};
+document.getElementById("play").onclick=function(){
+  var b=this;
+  if(timer){clearInterval(timer);timer=null;b.textContent="Play";return;}
+  b.textContent="Pause";
+  timer=setInterval(function(){t=(t+1)%N;render();},900);
+};
+var pbs=document.querySelectorAll("[data-preset]");
+for(var pi=0;pi<pbs.length;pi++){
+  (function(b){b.onclick=function(){seq=PRESETS[b.getAttribute("data-preset")]();render();};})(pbs[pi]);
+}
+var tabs=document.querySelectorAll(".tab");
+for(var ti=0;ti<tabs.length;ti++){
+  (function(b){b.onclick=function(){
+    for(var j=0;j<tabs.length;j++)tabs[j].classList.remove("on");
+    b.classList.add("on");
+    var ps=document.querySelectorAll(".pane");
+    for(var k=0;k<ps.length;k++)ps[k].classList.remove("on");
+    document.getElementById("pane-"+b.getAttribute("data-pane")).classList.add("on");
+  };})(tabs[ti]);
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="ArrowRight"){t=(t+1)%N;render();}
+  else if(e.key==="ArrowLeft"&&t>0){t--;render();}
+});
+
+buildRow();
+render();
+})();
+</script>
+</body>
+</html>

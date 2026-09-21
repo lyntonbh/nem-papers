@@ -1,0 +1,160 @@
+
+<h2 id="part2"><span class="part-label">Part 2</span>Building blocks: the networks, the trees, and the pre-processing tricks</h2>
+<p>Every model in the papers is assembled from the pieces below. The pieces are grouped as: how a network is trained at all; the three classic shapes (dense, convolutional, recurrent); the odd ones (autoencoders, random-weight networks); the non-neural baselines; the hyperparameter search; and the "decompose first" pre-processing family.</p>
+
+<div class="concept" id="c-nn">
+  <h3>A neuron, a layer, a dense network (MLP, DNN, BPNN)</h3>
+  <p class="one"><b>In one sentence.</b> A neuron multiplies each input by a weight, adds them up with a bias, and passes the sum through a simple bend (an activation function); a layer is many neurons on the same inputs; a dense network stacks layers so bends compose into any curve.</p>
+  <div class="diagram"><div id="d-neuron"></div><div class="cap">Left: one neuron. Right: three inputs, a hidden layer of four, one output. "MLP", "DNN" and "BPNN" (back-propagation neural network) all mean this shape; DNN usually implies more than two hidden layers.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Inputs: price now 120, pre-dispatch for next half-hour 150 (both divided by 100 to scale). Weights 0.3 and 0.8, bias −0.2. Sum = 0.3×1.2 + 0.8×1.5 − 0.2 = <span class="v" data-v="nn.sum"></span>. ReLU activation (negative becomes 0, positive passes) gives <span class="v" data-v="nn.relu"></span>; tanh would give <span data-v="nn.tanh"></span>; sigmoid <span data-v="nn.sig"></span>. Multiply by an output weight of 100 and the neuron says A$<span data-v="nn.out"></span>. Learning is nothing more than nudging 0.3, 0.8 and −0.2 until such outputs match history.
+  </div>
+</div>
+
+<div class="concept" id="c-train">
+  <h3>Training: loss, gradient descent, epochs, learning rate, Adam</h3>
+  <p class="one"><b>In one sentence.</b> Training measures how wrong the network is with a loss function, computes which direction each weight should move to reduce it (the gradient, by back-propagation), and takes a small step that way, over and over.</p>
+  <p>One pass through the training set is an <b>epoch</b>; Sinclair trains for up to 20. The <b>learning rate</b> is the step size (2 × 10<sup>−4</sup> in Sinclair): too big and training bounces, too small and it crawls. <b>Adam</b> is the standard optimiser; it keeps a running average of past gradients so each weight gets its own adaptive step. <b>Batch size</b> (128 in Sinclair) is how many samples are averaged per step. <b>Reduce-on-plateau</b> halves the learning rate when validation loss stops improving; <b>early stopping</b> ends training when it has not improved for several epochs (patience 5 in Sinclair) to avoid <a class="t" href="#c-reg">overfitting</a>.</p>
+  <div class="diagram"><div id="d-gd"></div><div class="cap">Loss as a landscape over one weight. Each step moves downhill by learning-rate × slope. Adam scales the step per weight.</div></div>
+</div>
+
+<div class="concept" id="c-loss">
+  <h3>Loss functions: MSE, MAE, Huber, and quantile (pinball)</h3>
+  <p class="one"><b>In one sentence.</b> The loss decides what "wrong" costs; squared error makes the model chase spikes hard, absolute error makes it aim for the median and ignore them, Huber is squared near zero and absolute far away, and quantile loss tilts the penalty so the model learns a specific percentile.</p>
+  <div class="diagram"><div id="d-loss"></div><div class="cap">Loss against the size of the miss. Huber (δ = 0.8 in Sinclair, on scaled data) follows MSE inside ±δ and MAE outside, so a A$10,000 spike miss does not dominate training the way it would under MSE.</div></div>
+  <div class="ex" id="c-quantile"><div class="exh">Worked example: quantile (pinball) loss, used by the Temporal Fusion Transformer</div>
+    For quantile q, loss = q × (y − ŷ) if the forecast is below the actual, else (1 − q) × (ŷ − y). With q = 0.9, actual 100: a forecast of 80 costs 0.9 × 20 = <span class="v" data-v="pin.low"></span>; a forecast of 120 costs 0.1 × 20 = <span class="v" data-v="pin.high"></span>. Under-forecasting is nine times dearer, so the model learns to sit above the actual 90 % of the time: that output is the 90th percentile. Training three such heads (q = 0.1, 0.5, 0.9) gives a band, which is how TFT produces its interval.
+  </div>
+</div>
+
+<div class="concept" id="c-reg">
+  <h3>Overfitting and the standard defences: dropout, layer normalisation, residual connections</h3>
+  <p class="one"><b>In one sentence.</b> Overfitting is memorising the training set's noise; dropout randomly switches neurons off during training so no single path can be relied on, layer normalisation rescales each sample's activations so training is stable, and a residual connection adds a layer's input straight to its output so the layer only has to learn a correction.</p>
+  <div class="diagram"><div id="d-reg"></div><div class="cap">Left: dropout knocks out a random 5 % (Sinclair) to 30 % of units each step. Middle: LayerNorm subtracts the mean and divides by the standard deviation across a sample's features. Right: the residual "skip" wire around a block; "pre-LN" (Sinclair's Figure 3) normalises before the block instead of after, which trains more stably in deep stacks.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> Layer normalisation normalises across the features of one sample. Batch normalisation normalises each feature across the samples in a batch. Transformers use the first because sequences in a batch have different lengths and statistics.</div>
+</div>
+
+<div class="concept" id="c-scaling">
+  <h3>Scaling inputs: standard, robust, quantile, and RevIN</h3>
+  <p class="one"><b>In one sentence.</b> Networks train badly on raw dollars, so every input is rescaled to a similar range; the choice matters for a series with a A$−1,000 to A$17,500 range and a median around A$100.</p>
+  <p><b>Standard</b> scaling subtracts the mean and divides by the standard deviation; one spike inflates the standard deviation and squashes all the ordinary prices into a narrow band. <b>Robust</b> scaling uses the median and inter-quartile range instead. <b>Quantile transformer</b> scaling (Sinclair's choice) maps every value to its rank on a 0 to 1 scale and then to a normal distribution, so A$100 and A$10,000 land at their percentiles and the spike stops dominating. <b>RevIN</b> (reversible instance normalisation, used inside PatchTST) normalises each input window by its own mean and standard deviation and un-does it on the output, so the model sees "shape" not "level".</p>
+  <div class="ex"><div class="exh">Worked example: RevIN on the six-row series</div>
+    Window mean = <span data-v="m.ybar"></span>, sd = <span data-v="m.sdy"></span>. Normalised values = <span data-v="rv.z"></span>. The model forecasts in this unit-free space; if it outputs 0.5 for the next step, RevIN returns 0.5 × <span data-v="m.sdy"></span> + <span data-v="m.ybar"></span> = A$<span class="v" data-v="rv.back"></span>. Notice the problem for spikes: a window that contains no spike has a small sd, so a model that has only ever seen z-scores of ±2 can never output the +8 that a spike would need. Sinclair mentions this as a reason PatchTST struggled.
+  </div>
+</div>
+
+<div class="concept" id="c-cnn">
+  <h3>1-D convolutional network (CNN)</h3>
+  <p class="one"><b>In one sentence.</b> A small window of weights (a kernel or filter) slides along the series and at each position outputs the weighted sum of the values under it, so the same pattern detector is applied everywhere; many filters run in parallel, and stacking layers detects patterns of patterns.</p>
+  <p>Terms you will meet: <b>kernel size</b> (how many time steps a filter spans), <b>stride</b> (how far it jumps each move), <b>padding</b> (zeros added at the ends so the output is the same length), <b>channels</b> (number of filters, or number of input series), <b>pooling</b> (take the max or mean over small blocks to shorten the series and keep the strongest response), <b>Conv1D</b> (Keras's name for this layer). A <b>TCN</b> (temporal convolutional network) is a stack of causal, dilated 1-D convolutions that only look backwards; the companion page walks one through numerically.</p>
+  <div class="diagram"><div id="d-cnn"></div><div class="cap">The kernel (−1, 0, +1) slid along eight half-hourly prices. Each output is "price two steps later minus price two steps earlier": a ramp detector. ReLU then keeps only the up-ramps.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Prices x = <span data-v="cnn.x"></span>. Kernel (−1, 0, +1), stride 1, no padding: outputs = <span data-v="cnn.y"></span> (six values from eight, because the window needs a neighbour on each side). After ReLU: <span data-v="cnn.relu"></span>. Max-pool with block 2: <span class="v" data-v="cnn.pool"></span>. A second filter, say (1, −2, 1), would detect V-shapes and peaks. Training learns the kernel values; the human only chooses the sizes. In Tan 2023 and Ghimire 2024 the CNN's outputs are not the forecast; they are handed to another model (an autoencoder, an RVFL) that does the regression.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> A CNN has no memory; each output depends only on the values under the kernel. Its reach grows only by stacking layers or dilating the kernel. That is why CNNs are usually paired with an LSTM (CNN-LSTM) when long context matters.</div>
+</div>
+
+<div class="concept" id="c-rnn">
+  <h3>Recurrent networks: RNN, LSTM, GRU, BiLSTM</h3>
+  <p class="one"><b>In one sentence.</b> A recurrent network reads the series one step at a time and carries a vector of memory forward, updating it at each step with the new value; an LSTM adds gates that learn what to keep, what to forget and what to output, and a GRU is a lighter version with two gates.</p>
+  <p>The basic RNN update is h<sub>t</sub> = tanh(W·x<sub>t</sub> + U·h<sub>t−1</sub> + b): the new memory is a bend of "this input plus the old memory". Its weakness is that the same U is multiplied in at every step, so signals from 50 steps back either vanish or explode. The <b>LSTM</b> fixes this with a separate cell state c<sub>t</sub> that is edited additively: a <b>forget gate</b> f (0 to 1) scales the old cell, an <b>input gate</b> i scales a proposed new value c̃, and an <b>output gate</b> o decides how much of the cell is exposed as h<sub>t</sub>. The <b>GRU</b> merges cell and hidden state and uses a reset gate and an update gate. A <b>bidirectional</b> LSTM runs a second copy from the end of the window backwards and concatenates the two memories, which is only legitimate when the whole window is in the past.</p>
+  <div class="diagram"><div id="d-lstm"></div><div class="cap">One LSTM cell. Solid line: the cell state c, edited by multiply-by-f then add i × c̃. Dashed: the hidden state h that is also the output.</div></div>
+  <div class="ex"><div class="exh">Worked example, one step with scalar states</div>
+    Old cell c = 0.60. The gates, after their sigmoids, come out as f = 0.90, i = 0.50, o = 0.70, and the candidate c̃ = 0.80. New cell c = f × 0.60 + i × 0.80 = <span data-v="lstm.c1"></span> + <span data-v="lstm.c2"></span> = <span class="v" data-v="lstm.c"></span>. Output h = o × tanh(c) = 0.70 × <span data-v="lstm.tanhc"></span> = <span class="v" data-v="lstm.h"></span>. If instead the forget gate had learned f = 0.1 (a spike just happened, forget the calm regime), the cell would drop to <span data-v="lstm.calt"></span>. For a full multi-step walk-through with real weight matrices, see the <a href="rnn_explainer.html">companion page</a>.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "LSTM" in Sinclair's tables is a two-layer LSTM that <em>does</em> receive the future covariates (pre-dispatch etc.) as inputs for the decoder steps. It is not a naive "history only" model, which is why it lands within 5 points of the transformers.</div>
+</div>
+
+<div class="concept" id="c-ae">
+  <h3>Autoencoders: plain, denoising, sparse, stacked (SDAE, SSDAE)</h3>
+  <p class="one"><b>In one sentence.</b> An autoencoder is trained to output its own input through a narrower middle layer, so the middle layer is forced to become a compressed summary; variants change what goes in (noise added) or what the middle is allowed to do (mostly off).</p>
+  <ol class="steps">
+    <li><b>Plain.</b> Encoder squeezes 48 half-hours to, say, 8 numbers; decoder expands back to 48; loss is reconstruction error. The 8 numbers are features.</li>
+    <li><b>Denoising (DAE).</b> Random noise (or random zeros) is added to the input, the target is still the clean input. The network can only succeed by learning the structure that survives noise, so its features ignore bid-by-bid jitter.</li>
+    <li><b>Sparse.</b> A penalty keeps the average activation of each middle neuron near a small value like 0.05, so on any given input most are off and each active one stands for something specific.</li>
+    <li><b>Stacked (SDAE, SSDAE).</b> Train one, freeze it, train a second on the first's middle layer, and so on; then put a regression layer on top and fine-tune the whole stack. Faster and more stable than training a deep network from scratch, which was the point in 2023.</li>
+  </ol>
+  <div class="diagram"><div id="d-ae"></div><div class="cap">Noisy in, clean out, through a bottleneck. Grey bottleneck units are the ones the sparsity penalty has switched off for this input.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Input: the 6-row series with noise added, <span data-v="ae.noisy"></span>. Target: the clean series <span data-v="ae.clean"></span>. A 6→2→6 autoencoder cannot store six numbers in two, so it learns something like (level, peak-height) and reconstructs a smoothed evening shape; the noise is what it drops. In Tan 2023 the CNN's feature maps go through a stacked sparse denoising autoencoder and the top layer regresses tomorrow's price from the compressed features.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "Encoder" in "autoencoder" and "encoder" in "transformer encoder" are different things. The first compresses to a bottleneck; the second is a stack of attention layers that keeps the sequence length.</div>
+</div>
+
+<div class="concept" id="c-trees">
+  <h3>The non-neural baselines: random forest, XGBoost, SVM, ELM</h3>
+  <p class="one"><b>In one sentence.</b> These are the "conventional machine learning" rows in the tables: decision-tree ensembles that split on thresholds, a kernel regression that fits a tube, and a random-feature network.</p>
+  <div class="diagram"><div id="d-tree"></div><div class="cap">One regression tree on two features. A random forest averages hundreds of such trees, each grown on a random subset of rows and features. XGBoost grows them one at a time, each fitted to the errors the previous ones left.</div></div>
+  <ul>
+    <li><b>Random forest (RF).</b> Many trees, each on a bootstrap sample; prediction is the average. Robust, no scaling needed, cannot extrapolate above the largest training price.</li>
+    <li><b>XGBoost (XGB).</b> Gradient boosting: tree 1 fits the target, tree 2 fits tree 1's residuals, and so on, with regularisation. Usually the strongest tabular baseline; same extrapolation limit.</li>
+    <li><b>Support vector machine / regression (SVM).</b> Fits the flattest function that keeps most points inside a tube of width ε, using a kernel to allow curves. Scales badly beyond tens of thousands of rows.</li>
+    <li><b>Extreme learning machine (ELM).</b> A one-hidden-layer network whose hidden weights are random and fixed; only the output weights are fitted by least squares. The RVFL below is an ELM with an added direct input-to-output link.</li>
+  </ul>
+</div>
+
+<div class="concept" id="c-rvfl">
+  <h3>Random vector functional link network (RVFL)</h3>
+  <p class="one"><b>In one sentence.</b> Take the inputs, push them through a hidden layer whose weights were drawn at random and are never changed, then fit a single linear regression from [inputs, hidden outputs] to the target by least squares; the randomness supplies nonlinearity for free and the least-squares fit takes milliseconds.</p>
+  <p>"Functional link" is the direct wire from the inputs to the output, so the model is "ordinary linear regression plus random nonlinear extra features". Least squares means solving for the output weights β that minimise Σ(y − Hβ)², which has the closed-form answer β = (HᵀH + λI)<sup>−1</sup>Hᵀy (λ is a small ridge penalty). No gradient descent, no epochs, no learning rate. In Ghimire 2024 the inputs to the RVFL are the CNN's features, so the "C" in CRVFL is the CNN and the RVFL is the regression head.</p>
+  <div class="diagram"><div id="d-rvfl"></div><div class="cap">Blue: the direct link. Grey dashed: random, fixed hidden weights. Purple: the only weights that are learned, in one least-squares solve.</div></div>
+  <div class="ex"><div class="exh">Worked example, fully computed</div>
+    Eight training rows: input x = price now ÷ 100, target y = price next half-hour ÷ 100.
+    <div id="t-rvfl"></div>
+    Two random hidden units with fixed weights (w, b) = (<span data-v="rvfl.w1"></span>, <span data-v="rvfl.b1"></span>) and (<span data-v="rvfl.w2"></span>, <span data-v="rvfl.b2"></span>), activation tanh. Each row's feature vector is [1, x, tanh(w₁x + b₁), tanh(w₂x + b₂)] (the 1 is the bias, x is the direct link). Solving least squares (with a small ridge penalty λ = 0.01 to keep the weights tame) gives output weights β = <span class="v" data-v="rvfl.beta"></span> for [bias, direct link, hidden 1, hidden 2]. Fitted values are in the last column; training MAE = <span data-v="rvfl.mae"></span> (×100 = A$<span data-v="rvfl.mae100"></span>/MWh). A different random draw of (w, b) gives a different fit, which is why the quality depends on how many hidden units you use and why Ghimire wraps the whole thing in Bayesian optimisation.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> Because the hidden weights are random, an RVFL is not "learning features"; it is a fast, well-behaved curve fitter. All the feature learning in MoDWT-CRVFL happens in the CNN before it.</div>
+</div>
+
+<div class="concept" id="c-bo">
+  <h3>Hyperparameter search: grid, random, and Bayesian optimisation</h3>
+  <p class="one"><b>In one sentence.</b> Hyperparameters are the settings you choose rather than train (lags, layers, learning rate, wavelet level); Bayesian optimisation picks the next setting to try by fitting a probabilistic curve to the trials so far and going where the predicted score is high or the uncertainty is wide.</p>
+  <p><b>Grid search</b> tries every combination (3 lags × 4 levels × 5 filter counts = 60 trainings). <b>Random search</b> samples combinations at random and is surprisingly competitive because usually only one or two settings matter. <b>Bayesian optimisation</b> keeps a surrogate model, almost always a Gaussian process, which gives a mean and a standard deviation for the score at every untried setting, and an <b>acquisition function</b> such as expected improvement that trades off exploiting good regions against exploring uncertain ones. Typically 20 to 50 trials replace hundreds.</p>
+  <div class="diagram"><div id="d-bo"></div><div class="cap">One hyperparameter, six trials done (dots). The purple line is the surrogate's guess, the band its uncertainty. The next trial goes where the upper edge of the band is highest.</div></div>
+  <div class="ex"><div class="exh">Where it appears</div>
+    Ghimire 2024 uses it to choose the MoDWT level, the number of lags, and the CNN and RVFL sizes ("Bayesian-optimised"). Sinclair uses a plainer sweep with walk-forward validation (Table 3 lists the ranges: dropout 0 to 0.3, learning rate 10<sup>−6</sup> to 10<sup>−3</sup>, input length 4 to 192).
+  </div>
+</div>
+
+<div class="concept" id="c-emd">
+  <h3>Empirical mode decomposition: EMD, EEMD, CEEMDAN, ICEEMDAN</h3>
+  <p class="one"><b>In one sentence.</b> EMD peels a series into a handful of oscillations from fastest to slowest (intrinsic mode functions, IMFs) plus a slow residual, using only the series' own peaks and troughs; the "ensemble" and "adaptive noise" variants fix its habit of mixing frequencies by averaging over many noisy copies.</p>
+  <ol class="steps">
+    <li>Find all local maxima and all local minima of the series.</li>
+    <li>Draw a smooth curve (a cubic spline) through the maxima, another through the minima: the upper and lower envelopes.</li>
+    <li>Subtract the average of the two envelopes from the series. Repeat ("sift") on the result until what is left oscillates around zero with one peak per zero-crossing. That is IMF1, the fastest component.</li>
+    <li>Subtract IMF1 from the original and repeat from step 1 to get IMF2, and so on, until the residual has no more oscillations.</li>
+  </ol>
+  <p><b>Mode mixing</b>: plain EMD often puts two different frequencies in one IMF or the same frequency across two. <b>EEMD</b> adds white noise to the series, runs EMD, repeats a few hundred times with different noise and averages the IMFs; the noise fills in the gaps so components separate cleanly. <b>CEEMDAN</b> adds the noise stage by stage so the IMFs sum back exactly to the series; <b>ICEEMDAN</b> ("improved") adds noise as the EMD of noise rather than raw noise, which removes spurious early modes and leaves less noise in the result. Then each IMF is forecast separately and the forecasts are summed.</p>
+  <div class="diagram"><div id="d-emd"></div><div class="cap">Illustrative (a synthetic series, not real sifting): an evening price shape decomposes into bid noise, a daily cycle, and a trend. The slow parts are easy to forecast; the error concentrates in IMF1.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> EMD is not a fixed filter; the components depend on the whole series, so an IMF at time t computed on the full dataset has seen the future (see <a class="t" href="#c-leak">leakage</a>). A causal use must recompute the decomposition on the history available at each origin, which is expensive and is why the review of Tan's paper notes the three-day test windows.</div>
+</div>
+
+<div class="concept" id="c-wavelet">
+  <h3>Wavelet transforms: DWT and MoDWT, levels, approximation and detail</h3>
+  <p class="one"><b>In one sentence.</b> A wavelet transform splits a series into a smooth "approximation" and a set of "detail" series, one per scale, using fixed short filters; the ordinary DWT halves the length at each level, while the maximal-overlap DWT (MoDWT) applies the same filters at every time step so every level stays full length and lined up with the original.</p>
+  <p>The simplest wavelet, Haar, uses the filters "average of two neighbours" (low-pass, gives the approximation A) and "half their difference" (high-pass, gives the detail D). <b>Level 1</b> applies them to the series; <b>level 2</b> applies them again to A1; each level doubles the time scale it captures. The <b>number of levels</b> is a hyperparameter (Ghimire chose it by Bayesian optimisation). Longer wavelets (Daubechies db4, symlets) use 4 to 8 coefficients instead of 2 and give smoother components. In the MoDWT the filters are applied at every t instead of every second t, so no information is thrown away and the components can be fed as ordinary aligned input columns.</p>
+  <div class="diagram"><div id="d-wavelet"></div><div class="cap">Haar decomposition of eight half-hourly prices containing one spike. The spike lands almost entirely in the detail series; the approximation is the underlying shape.</div></div>
+  <div class="ex"><div class="exh">Worked example, by hand</div>
+    x = <span data-v="hw.x"></span>.<br>
+    <b>DWT level 1</b> (pairs, halved length): A1 = averages of pairs = <span class="v" data-v="hw.a1"></span>; D1 = half-differences = <span class="v" data-v="hw.d1"></span>. The 300 spike shows up as the 110 in D1.<br>
+    <b>DWT level 2</b> on A1: A2 = <span class="v" data-v="hw.a2"></span>; D2 = <span class="v" data-v="hw.d2"></span>.<br>
+    <b>MoDWT level 1</b> (every position, full length; the first value wraps around to the end): A1 = <span class="v" data-v="hw.ma1"></span>; D1 = <span class="v" data-v="hw.md1"></span>. Eight inputs became sixteen aligned inputs, and the spike is visible in D1 at its own time step and the next.<br>
+    Check: at every step A1 + D1 or A1 − D1 recovers the original pair, so nothing was lost.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> The MoDWT of the whole test year, computed once, uses the value at t+1 to compute the detail at t for many wavelets (the filter is symmetric or the boundary wraps). That is <a class="t" href="#c-leak">leakage</a> unless the transform is re-run at each origin on past data only. Neither the Ghimire 2024 abstract nor the review says which was done.</div>
+</div>
+
+<div class="concept" id="c-ssa">
+  <h3>Other decompositions that appear as baselines: SSA, VMD, wavelet-vs-EMD</h3>
+  <p><b>Singular spectrum analysis (SSA)</b> stacks lagged copies of the series into a matrix, takes its singular value decomposition, and rebuilds the series from the top few components: trend, oscillations, noise. <b>Variational mode decomposition (VMD)</b> solves an optimisation for a fixed number K of band-limited modes with centre frequencies; it is less prone to mode mixing than EMD but you must choose K. Tan 2023 tried wavelet (WT), SSA and EEMD in front of the same CNN+SSDAE and found ICEEMDAN best; the review's table shows wavelet actually made that model worse than no decomposition.</p>
+</div>
+
+<div class="concept" id="c-hybrid">
+  <h3>The "decompose, forecast each part, add up" pattern</h3>
+  <p class="one"><b>In one sentence.</b> Split the series into components that are individually smoother than the whole, forecast each with its own model, and sum the forecasts; it works because the summed error is usually less than the error of forecasting the raw series, and it fails when the decomposition itself needs the future.</p>
+  <div class="diagram"><div id="d-hybrid"></div><div class="cap">The template behind Tan 2023 (ICEEMDAN in front, CNN+SSDAE per component), Ghimire 2024 (MoDWT in front, one CNN-RVFL on all components), and a dozen NEM papers not on this page.</div></div>
+  <div class="ex"><div class="exh">Reading the results tables with this in mind</div>
+    In Tan's table the raw-price CNN+SSDAE has MAPE 8.4 to 9.7 % and the ICEEMDAN version 6.0 to 7.0 %, so the decomposition is worth about 2.5 points. In Ghimire 2024 the wavelet front end lifts every predictor from KGE 0.66 to 0.74 up to 0.90 to 0.97, which is a much larger jump, and the size of that jump is itself a reason to ask whether the components were computed causally.
+  </div>
+</div>

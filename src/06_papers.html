@@ -1,0 +1,410 @@
+
+<h2 id="part5"><span class="part-label">Part 5</span>The papers, one by one</h2>
+<p>Each card: what was measured, what went in, the accuracy table against the paper's own baselines, the architecture as a diagram, and a walk-through of one sample passing through the model. Dotted terms link back to Parts 1 to 4.</p>
+
+<!-- ===================================================== TAN 2023 -->
+<div class="card" id="tan2023">
+  <h2>1 · Tan, Shen, Yu &amp; Lu (2023) — ICEEMDAN-CNN+SSDAE for NSW day-ahead prices</h2>
+  <div class="meta"><span class="badge part">Abstract + review table</span><span class="badge price">spot price</span> <b>Electric Power Systems Research</b> 220, 109300 · doi 10.1016/j.epsr.2023.109300 · Jiangnan University group (preprint on SSRN July 2022)</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Next-day half-hourly prices for NSW1 (<a class="t" href="#c-setup">day-ahead</a>: all 48 half-hours of tomorrow from today), with a stated interest in price spikes and in training faster than a recurrent network. The pipeline has five modules: a correlation screen picks the input factors, <a class="t" href="#c-emd">ICEEMDAN</a> splits every series into intrinsic mode functions, each IMF is forecast by a <a class="t" href="#c-cnn">CNN</a> feeding a <a class="t" href="#c-ae">stacked sparse denoising autoencoder</a>, a parameter-optimisation module tunes the pieces, and the IMF forecasts are <a class="t" href="#c-hybrid">summed</a>.</p>
+  <div class="kv">
+    <div>Data</div><div>NSW spot prices from AEMO, about five years for training; tests are four three-day windows, one per season (the review notes these are not full seasons).</div>
+    <div>Inputs</div><div>Price history and "related influencing factors" that pass a correlation screen; every input series is decomposed with ICEEMDAN.</div>
+    <div>Conventional baselines</div><div>Case I: <a class="t" href="#c-nn">BPNN</a>, <a class="t" href="#c-trees">random forest, SVM, ELM</a>, CNN, <a class="t" href="#c-rnn">LSTM, GRU</a>, SDAE, SSDAE, CNN+LSTM, CNN+GRU. Later cases swap the decomposition (none, <a class="t" href="#c-wavelet">wavelet</a>, <a class="t" href="#c-ssa">SSA</a>, EEMD, ICEEMDAN) and the predictor.</div>
+  </div>
+
+  <h4>Accuracy versus conventional methods</h4>
+  <p class="small">Values re-tabulated by Sadeghi et al., <em>Energies</em> 2025 (18, 6422), Table 3, from Tan's Cases II to V. <a class="t" href="#c-mae">MAE and RMSE</a> are on normalised prices (no unit); <a class="t" href="#c-mape">MAPE</a> is a percentage. Four values = {spring, summer, autumn, winter} test windows.</p>
+  <table>
+    <thead><tr><th>Model</th><th class="num">MAPE % spring</th><th class="num">summer</th><th class="num">autumn</th><th class="num">winter</th><th class="num">MAE (normalised) spring / summer / autumn / winter</th></tr></thead>
+    <tbody>
+      <tr class="bench"><td>LSTM</td><td class="num">13.01</td><td class="num">13.91</td><td class="num">14.83</td><td class="num">16.79</td><td class="num">0.0192 / 0.0164 / 0.0215 / 0.0285</td></tr>
+      <tr class="bench"><td>GRU</td><td class="num">12.74</td><td class="num">12.28</td><td class="num">14.45</td><td class="num">14.87</td><td class="num">0.0156 / 0.0222 / 0.0251 / 0.0152</td></tr>
+      <tr class="bench"><td>CNN</td><td class="num">16.67</td><td class="num">15.72</td><td class="num">16.88</td><td class="num">16.78</td><td class="num">0.0245 / 0.0207 / 0.0287 / 0.0342</td></tr>
+      <tr><td>CNN-LSTM</td><td class="num">11.45</td><td class="num">11.43</td><td class="num">13.50</td><td class="num">13.34</td><td class="num">0.0152 / 0.0135 / 0.0166 / 0.0200</td></tr>
+      <tr><td>CNN-GRU</td><td class="num">10.96</td><td class="num">10.90</td><td class="num">12.44</td><td class="num">12.90</td><td class="num">0.0112 / 0.0191 / 0.0215 / 0.0229</td></tr>
+      <tr><td>CNN+SSDAE (no decomposition)</td><td class="num">8.40</td><td class="num">8.36</td><td class="num">9.50</td><td class="num">9.70</td><td class="num">0.0070 / 0.0135 / 0.0054 / 0.0108</td></tr>
+      <tr><td>Wavelet-CNN+SSDAE</td><td class="num">11.97</td><td class="num">10.00</td><td class="num">11.86</td><td class="num">12.36</td><td class="num">0.0210 / 0.0093 / 0.0188 / 0.0242</td></tr>
+      <tr><td>SSA-CNN+SSDAE</td><td class="num">10.24</td><td class="num">11.06</td><td class="num">11.67</td><td class="num">10.41</td><td class="num">0.0086 / 0.0142 / 0.0364 / 0.0110</td></tr>
+      <tr><td>EEMD-CNN+SSDAE</td><td class="num">9.77</td><td class="num">8.86</td><td class="num">9.65</td><td class="num">9.50</td><td class="num">0.0116 / 0.0137 / 0.0127 / 0.0104</td></tr>
+      <tr><td>ICEEMDAN-CNN</td><td class="num">14.69</td><td class="num">15.98</td><td class="num">16.91</td><td class="num">17.42</td><td class="num">0.0177 / 0.0189 / 0.0210 / 0.0197</td></tr>
+      <tr><td>ICEEMDAN-LSTM</td><td class="num">13.48</td><td class="num">12.84</td><td class="num">14.45</td><td class="num">15.59</td><td class="num">0.0242 / 0.0246 / 0.0305 / 0.0316</td></tr>
+      <tr><td>ICEEMDAN-GRU</td><td class="num">10.68</td><td class="num">11.37</td><td class="num">12.33</td><td class="num">11.80</td><td class="num">0.0199 / 0.0158 / 0.0175 / 0.0179</td></tr>
+      <tr><td>ICEEMDAN-CNN-LSTM</td><td class="num">9.91</td><td class="num">9.44</td><td class="num">9.77</td><td class="num">9.68</td><td class="num">0.0164 / 0.0090 / 0.0097 / 0.0059</td></tr>
+      <tr><td>ICEEMDAN-CNN-GRU</td><td class="num">8.42</td><td class="num">7.95</td><td class="num">8.68</td><td class="num">8.24</td><td class="num">0.0075 / 0.0082 / 0.0071 / 0.0098</td></tr>
+      <tr class="best"><td>ICEEMDAN-CNN+SSDAE (proposed)</td><td class="num">6.63</td><td class="num">6.00</td><td class="num">6.97</td><td class="num">6.75</td><td class="num">0.0013 / 0.0043 / 0.0054 / 0.0047</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> The autoencoder predictor (CNN+SSDAE) already halves the LSTM's MAPE before any decomposition, and ICEEMDAN is the only decomposition that helps it further; wavelet and SSA decomposition make it worse. ICEEMDAN also hurts a bare CNN or LSTM, so the decomposition only pays off when paired with the autoencoder. With three-day test windows, differences of a point or two are within luck.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-tan"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Each frequency component gets its own CNN + autoencoder. The sum of the component forecasts is the price forecast.</div>
+  </div>
+  <h4>Walk one day through it</h4>
+  <ol class="steps">
+    <li>Take the last N days of NSW half-hourly price and the selected factors (say demand). Run ICEEMDAN on each: the price becomes, for example, IMF1 (5-minute bid noise), IMF2 (intraday swings), IMF3 (daily cycle), IMF4 (weekly), residual (trend).</li>
+    <li>For IMF3, the CNN slides its filters over the last few days of IMF3 and hands the feature maps to the SSDAE, which compresses them and regresses tomorrow's 48 values of IMF3. Same for every other IMF, each with its own network.</li>
+    <li>Add the five IMF forecasts half-hour by half-hour. That sum is tomorrow's price forecast. The smooth IMFs are forecast almost perfectly; nearly all of the 6.6 % MAPE comes from IMF1 and IMF2.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.1016/j.epsr.2023.109300">doi 10.1016/j.epsr.2023.109300</a> (abstract only reachable) ·
+    <a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4156560">SSRN 4156560 preprint</a> ·
+    <a href="https://doi.org/10.3390/en18246422">Energies 2025, 18, 6422 review (Table 3 re-tabulates Tan's results)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== GHIMIRE 2023 -->
+<div class="card" id="ghimire2023">
+  <h2>2 · Ghimire et al. (2023) — TNET transformer for Queensland electricity demand</h2>
+  <div class="meta"><span class="badge full">Full text read</span><span class="badge demand">demand, not price</span> <b>Energy and AI</b> 14, 100302 · doi 10.1016/j.egyai.2023.100302 · University of Southern Queensland with Universidad de Alcalá / Rey Juan Carlos</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Next-day electricity demand at four Energex distribution substations in south-east Queensland (Coopers Plains, Browns Plains, Beenleigh, Bethania), using a <a class="t" href="#c-encdec">transformer encoder</a> that reads six <a class="t" href="#c-setup">lagged</a> demand values together with ten local climate variables. Sinclair cites it as the nearest precedent for a transformer on NEM-area data, but it is a load forecast at feeder scale, not a market price.</p>
+  <div class="kv">
+    <div>Data</div><div>Half-hourly Energex demand (280,561 records) summed to 3,640 daily values. <a class="t" href="#c-split">Train</a> 1 Jul 2011 to 30 Jun 2021 (2,801 days, 20 % held out for validation), test 1 Jul 2021 to 30 Jun 2022 (365 days).</div>
+    <div>Inputs</div><div>Six lags of demand (lag count from the false-nearest-neighbour test, delay from mutual information) plus SILO climate: rainfall, radiation, humidity, evaporation, max and min temperature and others, giving 15 to 21 features per site. The first lag alone carries 32 to 40 % of feature importance.</div>
+    <div>Model</div><div><a class="t" href="#c-pos">Time2Vec</a> embedding, three <a class="t" href="#c-attn">multi-head self-attention</a> blocks with 12 heads each, each followed by <a class="t" href="#c-reg">dropout, layer normalisation</a> and a 1-D <a class="t" href="#c-cnn">convolution</a> with ReLU; global average pooling; dense output of one value. Prediction intervals at 95 % from kernel density estimation.</div>
+    <div>Baselines</div><div><a class="t" href="#c-rnn">LSTM, bidirectional LSTM, GRU</a>, CNN, <a class="t" href="#c-nn">DNN</a>, all tuned on the same inputs.</div>
+  </div>
+
+  <h4>Accuracy versus conventional methods (test year Jul 2021 to Jun 2022)</h4>
+  <p class="small">From the paper's Tables 5 and 7. <a class="t" href="#c-mae">RMSE and MAE</a> in MW; <a class="t" href="#c-mape">RMSPE and MAPE</a> in percent; <a class="t" href="#c-corr">r</a> is correlation. The transformer is best on MAPE at every site and on RMSE at every site.</p>
+  <table>
+    <thead><tr><th>Site</th><th>Model</th><th class="num">r</th><th class="num">RMSE (MW)</th><th class="num">MAE (MW)</th><th class="num">RMSPE %</th><th class="num">MAPE %</th></tr></thead>
+    <tbody>
+      <tr class="best"><td rowspan="6">Coopers Plains</td><td>TNET (proposed)</td><td class="num">0.955</td><td class="num">42.31</td><td class="num">27.35</td><td class="num">10.27</td><td class="num">7.50</td></tr>
+      <tr><td>GRU</td><td class="num">0.950</td><td class="num">44.10</td><td class="num">29.33</td><td class="num">10.70</td><td class="num">8.17</td></tr>
+      <tr><td>CNN</td><td class="num">0.948</td><td class="num">44.94</td><td class="num">30.78</td><td class="num">10.90</td><td class="num">8.34</td></tr>
+      <tr><td>DNN</td><td class="num">0.948</td><td class="num">45.21</td><td class="num">30.78</td><td class="num">10.97</td><td class="num">8.50</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.948</td><td class="num">45.75</td><td class="num">30.81</td><td class="num">11.10</td><td class="num">8.53</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.946</td><td class="num">45.79</td><td class="num">31.18</td><td class="num">11.11</td><td class="num">8.65</td></tr>
+      <tr class="best"><td rowspan="6">Browns Plains</td><td>TNET (proposed)</td><td class="num">0.956</td><td class="num">55.35</td><td class="num">43.23</td><td class="num">5.94</td><td class="num">4.77</td></tr>
+      <tr><td>GRU</td><td class="num">0.958</td><td class="num">57.10</td><td class="num">45.28</td><td class="num">6.12</td><td class="num">5.03</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.953</td><td class="num">57.78</td><td class="num">45.82</td><td class="num">6.20</td><td class="num">5.01</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.951</td><td class="num">58.67</td><td class="num">46.32</td><td class="num">6.29</td><td class="num">5.00</td></tr>
+      <tr><td>CNN</td><td class="num">0.954</td><td class="num">59.27</td><td class="num">47.21</td><td class="num">6.36</td><td class="num">5.25</td></tr>
+      <tr><td>DNN</td><td class="num">0.943</td><td class="num">89.04</td><td class="num">71.80</td><td class="num">9.55</td><td class="num">8.38</td></tr>
+      <tr class="best"><td rowspan="6">Beenleigh</td><td>TNET (proposed)</td><td class="num">0.942</td><td class="num">34.83</td><td class="num">24.37</td><td class="num">8.87</td><td class="num">6.56</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.941</td><td class="num">35.07</td><td class="num">24.53</td><td class="num">8.94</td><td class="num">6.56</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.935</td><td class="num">36.68</td><td class="num">26.28</td><td class="num">9.35</td><td class="num">7.02</td></tr>
+      <tr><td>DNN</td><td class="num">0.941</td><td class="num">36.80</td><td class="num">26.45</td><td class="num">9.38</td><td class="num">6.95</td></tr>
+      <tr><td>CNN</td><td class="num">0.917</td><td class="num">40.92</td><td class="num">30.55</td><td class="num">10.43</td><td class="num">8.13</td></tr>
+      <tr><td>GRU</td><td class="num">0.912</td><td class="num">41.86</td><td class="num">30.87</td><td class="num">10.67</td><td class="num">8.24</td></tr>
+      <tr class="best"><td rowspan="6">Bethania</td><td>TNET (proposed)</td><td class="num">0.970</td><td class="num">21.96</td><td class="num">17.06</td><td class="num">6.86</td><td class="num">5.53</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.950</td><td class="num">23.22</td><td class="num">18.18</td><td class="num">7.26</td><td class="num">5.77</td></tr>
+      <tr><td>CNN</td><td class="num">0.964</td><td class="num">23.66</td><td class="num">18.42</td><td class="num">7.40</td><td class="num">5.85</td></tr>
+      <tr><td>GRU</td><td class="num">0.843</td><td class="num">24.10</td><td class="num">18.87</td><td class="num">7.54</td><td class="num">5.97</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.931</td><td class="num">29.73</td><td class="num">23.22</td><td class="num">9.29</td><td class="num">7.28</td></tr>
+      <tr><td>DNN</td><td class="num">0.951</td><td class="num">30.19</td><td class="num">24.42</td><td class="num">9.44</td><td class="num">8.15</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> The gains are real but modest: 5 to 10 % lower MAE than the next-best recurrent model, and the runner-up changes from site to site (GRU, BiLSTM, LSTM) while the transformer is consistently first. That consistency is the paper's main argument. It also passed <a class="t" href="#c-dm">Diebold-Mariano</a> tests against each baseline. The <a class="t" href="#c-gpi">GPI, Willmott, Nash-Sutcliffe and Legates-McCabe</a> indices in Tables 6 and 8 rank the models the same way.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-ghimire23"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">An encoder-only transformer. There is no decoder because the output is a single number (tomorrow's demand). Time2Vec replaces the usual positional encoding with learned sine features of time.</div>
+  </div>
+  <h4>Walk one day through it</h4>
+  <ol class="steps">
+    <li>Build the input row for Coopers Plains on a given day: the six most recent daily demands and the ten SILO climate values, 16 numbers, each scaled.</li>
+    <li>Time2Vec turns the day index into a handful of learned sinusoids and appends them, so the model knows the weekday and season.</li>
+    <li>Three attention blocks let every element of the row weigh every other (the lag-1 demand attends to the temperature, and so on); each block ends with a 1-D convolution that mixes neighbouring positions.</li>
+    <li>Global average pooling squashes the sequence to one vector; a single linear unit reads out tomorrow's MW. Kernel density estimation over the training residuals gives the 95 % band.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.1016/j.egyai.2023.100302">doi 10.1016/j.egyai.2023.100302</a> (open access) ·
+    <a href="https://ebuah.uah.es/xmlui/handle/10017/63099">Universidad de Alcalá repository copy (PDF used here)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== LI 2024 -->
+<div class="card" id="li2024">
+  <h2>3 · Li, Wang, Zhang &amp; Wang (2024) — TempDRL: a transformer feeding a reinforcement-learning battery bidder</h2>
+  <div class="meta"><span class="badge full">Full text read (arXiv version)</span><span class="badge ops">battery bidding</span> <b>IEEE Trans. Energy Markets, Policy and Regulation</b> 2(3), 392-406 · doi 10.1109/TEMPR.2024.3372656 · Monash University</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Not a forecast error but revenue: how much a 2 MW / 10 MWh battery earns over two months when it bids simultaneously into the spot market and the six contingency <a class="t" href="#c-nem">FCAS</a> markets. The transformer's job is to turn the last 32 five-minute intervals (160 minutes) of all seven prices into a 64-number summary; a <a class="t" href="#c-rl">Soft Actor-Critic</a> agent then chooses charge or discharge power and the bid quantities.</p>
+  <div class="kv">
+    <div>Data</div><div>2016 NEM prices for VIC, NSW, QLD, SA and TAS at 5-minute resolution; first ten months train, last two months test.</div>
+    <div>Inputs</div><div>Seven price series only (spot + six FCAS), no weather, no demand.</div>
+    <div>Model</div><div>Prices embedded to 64 dimensions, two stacked <a class="t" href="#c-attn">multi-head attention</a> layers with 8 heads, global average pooling to a 1×64 vector, then SAC with two 512-unit hidden layers, <a class="t" href="#c-train">learning rate</a> 0.0003, discount 0.99.</div>
+    <div>Baselines</div><div>MLP-DRL (same agent without the transformer), LP&amp;O (LSTM price forecast + <a class="t" href="#c-milp">MILP</a> optimiser), TP&amp;O (transformer forecast + optimiser), and PIO (optimiser with perfect information, the ceiling).</div>
+  </div>
+
+  <h4>Revenue versus the benchmarks (Table II, joint spot + FCAS participation, two-month test, AU$)</h4>
+  <table>
+    <thead><tr><th>Region</th><th class="num">MLP-DRL</th><th class="num">LSTM forecast + optimiser</th><th class="num">Transformer forecast + optimiser</th><th class="num">TempDRL (proposed)</th><th class="num">Gain over best benchmark</th></tr></thead>
+    <tbody>
+      <tr><td>VIC</td><td class="num">22,975</td><td class="num">29,049</td><td class="num">30,320</td><td class="num"><b>35,686</b></td><td class="num">+18 %</td></tr>
+      <tr><td>NSW</td><td class="num">18,052</td><td class="num">19,564</td><td class="num">19,682</td><td class="num"><b>25,948</b></td><td class="num">+32 %</td></tr>
+      <tr><td>QLD</td><td class="num">31,052</td><td class="num">38,381</td><td class="num">39,640</td><td class="num"><b>46,703</b></td><td class="num">+18 %</td></tr>
+      <tr><td>SA</td><td class="num">40,920</td><td class="num">41,413</td><td class="num">41,165</td><td class="num"><b>49,146</b></td><td class="num">+19 %</td></tr>
+      <tr><td>TAS</td><td class="num">45,805</td><td class="num">43,287</td><td class="num">44,558</td><td class="num"><b>52,478</b></td><td class="num">+15 %</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> The comparison that matters for forecasting is TP&amp;O versus TempDRL: the same transformer used as a price forecaster feeding an optimiser earns 15 to 32 % less than the same transformer used as a feature extractor for an agent (the <a class="t" href="#c-milp">worked example</a> in Part 4 shows why). The authors read the attention weights and find the agent looks hardest at past intervals whose price differs most from the current one, which is what a spread-trading heuristic would do. The 2016 data predate the 5-minute settlement change and the current battery fleet, so the dollar figures are illustrative.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-li"></div>
+    <div class="legend"><span class="li">input</span><span class="lm">learned model</span><span class="lo">output</span><span class="lb">environment</span></div>
+    <div class="cap">Reinforcement learning loop: the agent acts, the market simulator pays it, and the payment trains both the actor and the transformer end to end. Nothing is ever trained to "predict the price".</div>
+  </div>
+  <h4>Walk one interval through it</h4>
+  <ol class="steps">
+    <li>At 17:35 the state is the 32 × 7 matrix of the last 160 minutes of spot and six FCAS prices, plus state of charge 60 %.</li>
+    <li>Each of the 32 rows is embedded to 64 numbers and positionally encoded; two attention layers let each interval weigh the others (the paper finds intervals whose price differs most from the latest get the most weight); the 32 rows are averaged into one 64-vector.</li>
+    <li>The actor turns that vector and the state of charge into an action: discharge 1.6 MW into spot, offer 0.4 MW to fast-raise, 0.4 MW to slow-raise, and so on.</li>
+    <li>The simulator settles the interval at the actual prices, pays the revenue, updates the state of charge, and the critic's error on that revenue nudges the actor, the critic and the transformer.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://arxiv.org/abs/2402.19110">arXiv 2402.19110</a> ·
+    <a href="https://ieeexplore.ieee.org/document/10458427/">IEEE Xplore 10458427</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== GHIMIRE 2024 -->
+<div class="card" id="ghimire2024">
+  <h2>4 · Ghimire et al. (2024) — MoDWT-CRVFL for NSW half-hourly prices</h2>
+  <div class="meta"><span class="badge part">Abstract + review table</span><span class="badge price">spot price</span> <b>Applied Energy</b> 374, 123920 · doi 10.1016/j.apenergy.2024.123920 · University of Southern Queensland, Universidad de Alcalá, UTS</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Half-hourly NSW spot prices for the year 2022, scored by season and for the whole year. The chain is: <a class="t" href="#c-wavelet">MoDWT</a> splits the price history into smooth and detail components; a <a class="t" href="#c-cnn">CNN</a> extracts features from those components; a <a class="t" href="#c-rvfl">random vector functional link network</a> maps the features to the price in one closed-form step; and <a class="t" href="#c-bo">Bayesian optimisation</a> chooses the hyperparameters. This is the paper Sinclair calls "a hybrid MoDWT decomposition technique with a Bayesian-optimised CNN".</p>
+  <div class="kv">
+    <div>Data</div><div>Half-hourly NSW prices; 2022 is the test year (summer, autumn, winter, spring, annual).</div>
+    <div>Inputs</div><div>Wavelet components of the lagged price series. Lag count and wavelet level are set by Bayesian optimisation (the exact values are in the paywalled body).</div>
+    <div>Baselines</div><div>Same wavelet front end with LSTM, DNN, <a class="t" href="#c-trees">XGBoost, random forest</a> and MLP predictors; and raw-price Bi-LSTM, LSTM, DNN, RF, XGBoost and MLP.</div>
+  </div>
+
+  <h4>Accuracy versus conventional methods (2022)</h4>
+  <p class="small"><a class="t" href="#c-kge">KGE</a> rewards getting the mean, the spread and the correlation right at once (1 is perfect). <a class="t" href="#c-gpi">GPI</a> is the paper's own composite (higher is better, only comparable within the paper). Annual KGE values are listed in the abstract in this order; the abstract names 11 models but gives 10 numbers, so the last pairing is uncertain.</p>
+  <div class="grid2">
+    <table>
+      <thead><tr><th>Model</th><th class="num">KGE (annual 2022)</th></tr></thead>
+      <tbody>
+        <tr class="best"><td>MoDWT-CRVFL (proposed)</td><td class="num">0.972</td></tr>
+        <tr><td>MoDWT-XGBoost</td><td class="num">0.963</td></tr>
+        <tr><td>MoDWT-LSTM</td><td class="num">0.958</td></tr>
+        <tr><td>MoDWT-random forest</td><td class="num">0.943</td></tr>
+        <tr><td>MoDWT-MLP</td><td class="num">0.930</td></tr>
+        <tr><td>MoDWT-DNN</td><td class="num">0.899</td></tr>
+        <tr class="bench"><td>RF (raw prices)</td><td class="num">0.739</td></tr>
+        <tr class="bench"><td>XGBoost (raw prices)</td><td class="num">0.738</td></tr>
+        <tr class="bench"><td>LSTM (raw prices)</td><td class="num">0.708</td></tr>
+        <tr class="bench"><td>DNN (raw prices)</td><td class="num">0.696</td></tr>
+        <tr class="bench"><td>Bi-LSTM (raw prices)</td><td class="num">0.661</td></tr>
+      </tbody>
+    </table>
+    <div>
+      <table>
+        <thead><tr><th>Period</th><th class="num">GPI of MoDWT-CRVFL</th></tr></thead>
+        <tbody>
+          <tr><td>Summer</td><td class="num">1.61</td></tr><tr><td>Autumn</td><td class="num">1.33</td></tr><tr><td>Winter</td><td class="num">1.85</td></tr><tr><td>Spring</td><td class="num">1.30</td></tr><tr><td>Annual</td><td class="num">0.78</td></tr>
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>Model (via Energies 2025 review)</th><th class="num">MAE A$/MWh</th><th class="num">RMSE A$/MWh</th><th class="num">R²</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>MoDWT-CRVFL</td><td class="num">6.03</td><td class="num">8.62</td><td class="num">0.999</td></tr>
+          <tr><td>MoDWT-LSTM</td><td class="num">22.50</td><td class="num">37.16</td><td class="num">0.993</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p><b>Reading it.</b> The wavelet front end does most of the work: every decomposed model scores KGE 0.90 to 0.97 while every raw-price model sits at 0.66 to 0.74. The RVFL adds a little on top of XGBoost and LSTM. An RMSE of A$8.6/MWh on 2022 NSW prices, a year with a June price-cap intervention and hundreds of spike half-hours, is remarkably low and should be read with the <a class="t" href="#c-leak">leakage</a> caveat: if the wavelet components were computed over the full series, the "past" inputs at each step contain information from after it.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-ghimire24"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Bayesian optimisation sits outside the pipeline, re-running it with new settings and keeping what scores best on validation data.</div>
+  </div>
+  <h4>Walk one half-hour through it</h4>
+  <ol class="steps">
+    <li>Take the last L half-hours of NSW price (L chosen by the optimiser). Apply the MoDWT at J levels: the price becomes J detail series plus one approximation, all length L, as in the <a class="t" href="#c-wavelet">hand example</a>.</li>
+    <li>Stack them as J+1 channels and run the CNN's filters along them; flatten the feature maps into one vector.</li>
+    <li>Push that vector through the RVFL's random hidden layer, concatenate with the vector itself, and multiply by the least-squares output weights. The result is the next half-hour's price.</li>
+    <li>Outside this loop, Bayesian optimisation has tried perhaps 30 combinations of (L, J, filter count, hidden units) and kept the one with the best validation score.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.1016/j.apenergy.2024.123920">doi 10.1016/j.apenergy.2024.123920</a> (open access, but the publisher site was captcha-walled during compilation; abstract taken from the ADS and RePEc mirrors) ·
+    <a href="https://ui.adsabs.harvard.edu/abs/2024ApEn..37423920G/abstract">ADS abstract</a> ·
+    <a href="https://doi.org/10.3390/en18246422">Energies 2025 review, Table 3 (MAE/RMSE/R² row)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== LIU 2024 -->
+<div class="card" id="liu2024">
+  <h2>5 · Liu, Cai, Dalzell &amp; Mills (2024) — a fine-tuned LLM reads AEMO market notices for a CNN-LSTM</h2>
+  <div class="meta"><span class="badge abs">Abstract + captions only</span><span class="badge price">extreme spot prices</span> <b>IECON 2024</b> (50th IEEE Industrial Electronics Society conference), pp. 1-6 · doi 10.1109/IECON55916.2024.10906045 · RMIT University and La Trobe University</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Spot prices during extreme events, for the benefit of retail traders. AEMO's <a class="t" href="#c-nem">market notices</a> (lack-of-reserve declarations and the like) explain why a spike is coming, but they are free text. A <a class="t" href="#c-llm">large language model fine-tuned with QLoRA</a> converts each notice into structured fields (region, time window, event type), producing an "event" time series. A <a class="t" href="#c-cnn">CNN</a>-<a class="t" href="#c-rnn">LSTM</a> then takes both the <a class="t" href="#c-wavelet">wavelet</a>-transformed price history and the event series and produces a forecast that is "adjusted" when an event is active. Figures show the adjusted versus unadjusted forecast for SA on 4 May 2023 and NSW on 21 June 2023, and an example of ChatGPT-4 extracting an LOR notice.</p>
+  <div class="kv">
+    <div>Data</div><div>NEM prices and AEMO market notices; the two worked examples are from May and June 2023. The training window is not in the abstract.</div>
+    <div>Inputs</div><div>Price history (wavelet-transformed, per the index terms) and LLM-extracted notice events.</div>
+    <div>Baselines</div><div>Index terms list RMSE, MSE, MLP and RNN, so a CNN-LSTM without the notice channel and simpler networks are compared, but the numbers are behind the IEEE paywall.</div>
+  </div>
+  <div class="note warn">No accuracy table is shown because the paper's results could not be reached. Sinclair's summary is that notice information "can meaningfully improve forecasts during volatile periods". Treat that as a qualitative claim until the paper is read in full. A related 2025 benchmark (NSW-EPNews, arXiv 2506.11050) found the opposite for news text fed to general-purpose LLMs, so the fine-tuning and the structured extraction are probably the load-bearing parts.</div>
+
+  <h4>Architecture (reconstructed from the abstract and figure captions)</h4>
+  <div class="diagram"><div id="d-liu"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Two channels merge: numbers (price) and text (notices). The LLM is only used to turn text into a numeric event series; it does not forecast prices itself in the final system.</div>
+  </div>
+  <h4>Walk one afternoon through it</h4>
+  <ol class="steps">
+    <li>14:10, AEMO publishes "LOR2 forecast for SA 17:30 to 19:00". The fine-tuned LLM reads it and emits {SA, LOR2, 17:30, 19:00}.</li>
+    <li>The event channel for SA is set to 1 (or to a severity code) for the half-hours 17:30 to 19:00 and 0 elsewhere.</li>
+    <li>The wavelet-transformed price history and the event channel go into the CNN-LSTM. The convolution finds local shapes; the LSTM carries the day's context; the output for 18:00 is raised because the event channel is on.</li>
+    <li>Figure 3 of the paper compares that adjusted forecast to the unadjusted one for SA on 4 May 2023.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://ieeexplore.ieee.org/document/10906045/">IEEE Xplore 10906045 (abstract, index terms, figure captions)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== MALYALA 2024 -->
+<div class="card" id="malyala2024">
+  <h2>6 · Malyala, Thattai, Malik &amp; Ravishankar (2024) — GPI-DSSM: forecasting RRP from price and demand only</h2>
+  <div class="meta"><span class="badge abs">Abstract + captions only</span><span class="badge price">regional reference price</span> <b>ICSCGE 2024</b> (4th International Conference on Smart City and Green Energy, Sydney), pp. 156-161 · doi 10.1109/ICSCGE64239.2024.11064192 · UNSW Sydney</div>
+
+  <h4>What they set out to measure</h4>
+  <p>The <a class="t" href="#c-nem">regional reference price</a> and aggregate demand of a whole NEM state, with the deliberate choice to leave weather out. Their argument: a state spans many climates, so a single weather series adds noise; demand already integrates the weather that matters. Two models are fused. The Graph-based Patch Informer (GPI) is an <a class="t" href="#c-informer">Informer</a> that cuts the sequence into <a class="t" href="#c-patchtst">patches</a> and adds a <a class="t" href="#c-gnn">graph layer</a>. The Deep State Sequential Memory (DSSM) is a <a class="t" href="#c-ssm">GRU state-space model</a> whose hidden state is tied to aggregate demand. Training uses a smooth L1 (<a class="t" href="#c-loss">Huber-like</a>) loss.</p>
+  <div class="kv">
+    <div>Data</div><div>State-wide RRP and total demand; the state and years are not in the abstract.</div>
+    <div>Inputs</div><div>Price and demand history only.</div>
+    <div>Baselines</div><div>Figure captions show sensitivity to model dimension, number of layers and hidden dimension, and a feed-forward output comparison; an LSTM and attention baseline are implied by the index terms. No numbers reachable.</div>
+  </div>
+  <div class="note warn">No accuracy table: paywalled. Sinclair cites this paper for the claim that "reliable forecasts can be achieved using only price and demand without weather inputs", which is at odds with Sinclair's own SHAP result that weather forecasts modulate the demand effect. The two are reconcilable if Malyala used observed weather while Sinclair used forecast weather aligned to the horizon (see the <a class="t" href="#c-ssm">DSSM entry</a>).</div>
+
+  <h4>Architecture (reconstructed from the abstract)</h4>
+  <div class="diagram"><div id="d-malyala"></div>
+    <div class="legend"><span class="li">input</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Two branches read the same price-and-demand history: an attention branch for long patterns and a recurrent branch that carries demand as its memory. Their outputs are combined into the RRP forecast.</div>
+  </div>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://ieeexplore.ieee.org/document/11064192/">IEEE Xplore 11064192 (abstract, index terms, figure captions)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== SINCLAIR 2026 -->
+<div class="card" id="sinclair2026">
+  <h2>7 · Sinclair, Shepley &amp; Hajati (2026) — Learning the Grid: transformer architectures versus AEMO pre-dispatch</h2>
+  <div class="meta"><span class="badge full">Full text read</span><span class="badge price">spot price, 3 regions</span> <b>Applied Sciences</b> 16(1), 75 · doi 10.3390/app16010075 · published 21 Dec 2025 · University of New England, Armidale</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Half-hourly RRP from 2 to 16 hours ahead in NSW1, then QLD1 and VIC1, using unmodified <a class="t" href="#c-encdec">transformer architectures</a> and scoring them against AEMO's published <a class="t" href="#c-nem">pre-dispatch</a> price at the same horizons. The one design choice that turns out to matter: the decoder is fed <a class="t" href="#c-covariates">known-future covariates</a>, above all AEMO's own pre-dispatch price and demand forecasts and the weather forecast for the capital city. A <a class="t" href="#c-shap">SHAP</a> analysis then shows the pre-dispatch RRP alone carries over 60 % of the model's feature importance. The best model is the decoder-only variant, which never sees the past at all.</p>
+  <div class="kv">
+    <div>Data</div><div>30-minute records from November 2022 to August 2025, 49,447 half-hours. 80:20 chronological <a class="t" href="#c-split">split</a>: 37,085 training, 2,440 validation, 9,858 test. Hyperparameters chosen by five-fold walk-forward validation. Dataset published on Kaggle; code on GitHub; live API at nem.redaxe.com.</div>
+    <div>Encoder inputs (past 96 half-hours = 48 h)</div><div>RRP, demand, net interchange, capital-city temperature, cloud cover, humidity, wind speed (Open-Meteo), workday flag, <a class="t" href="#c-pos">sine/cosine</a> of half-hour, day of week and month.</div>
+    <div>Decoder inputs (next 32 half-hours = 16 h)</div><div>The same variables as AEMO pre-dispatch forecasts and Open-Meteo weather forecasts, plus hours-to-delivery.</div>
+    <div>Model sizes</div><div>Small (used in the tables): 3 <a class="t" href="#c-tlayer">layers</a>, 4 heads, d_model 128, feed-forward 512, dropout 0.05. Tiny / medium / large also tested; small was best at 2 and 4 h and within 1 % elsewhere. <a class="t" href="#c-loss">Huber loss</a> (δ 0.8), Adam at 2e-4, <a class="t" href="#c-scaling">quantile-transformer scaling</a>, 20 epochs with early stopping.</div>
+    <div>Baselines</div><div>Two-layer <a class="t" href="#c-rnn">LSTM</a> (same inputs), <a class="t" href="#c-tft">Temporal Fusion Transformer</a> (quantile loss), <a class="t" href="#c-patchtst">PatchTST</a> (past only, patch 24 stride 6), <a class="t" href="#c-timesfm">TimesFM</a> (pre-trained, zero-shot, price only), and AEMO pre-dispatch.</div>
+    <div>Metric</div><div><a class="t" href="#c-nmape">nMAPE</a> = mean absolute error divided by the mean observed price, times 100. Also <a class="t" href="#c-mae">MAE</a> in A$/MWh and a <a class="t" href="#c-dm">Diebold-Mariano</a> test against AEMO.</div>
+  </div>
+
+  <h4>Accuracy versus AEMO and conventional methods: NSW1 nMAPE %, lower is better (Table 4)</h4>
+  <table>
+    <thead><tr><th>Model</th><th class="num">2 h</th><th class="num">4 h</th><th class="num">8 h</th><th class="num">12 h</th><th class="num">16 h</th><th>Uses future covariates?</th></tr></thead>
+    <tbody>
+      <tr class="best"><td>Decoder-only transformer (parallel)</td><td class="num">33.6</td><td class="num">34.2</td><td class="num">36.8</td><td class="num">38.4</td><td class="num">39.2</td><td>Yes (only those)</td></tr>
+      <tr><td>Temporal Fusion Transformer</td><td class="num">36.3</td><td class="num">37.7</td><td class="num">38.4</td><td class="num">39.5</td><td class="num">40.8</td><td>Yes</td></tr>
+      <tr><td>Encoder-decoder transformer (parallel)</td><td class="num">37.9</td><td class="num">37.9</td><td class="num">38.2</td><td class="num">40.1</td><td class="num">40.5</td><td>Yes</td></tr>
+      <tr><td>Decoder-only, autoregressive</td><td class="num">38.7</td><td class="num">38.5</td><td class="num">39.5</td><td class="num">39.5</td><td class="num">40.2</td><td>Yes</td></tr>
+      <tr><td>Two-layer LSTM</td><td class="num">38.2</td><td class="num">40.1</td><td class="num">42.0</td><td class="num">42.5</td><td class="num">44.4</td><td>Yes</td></tr>
+      <tr><td>Encoder-decoder, autoregressive</td><td class="num">40.8</td><td class="num">42.0</td><td class="num">42.7</td><td class="num">43.0</td><td class="num">43.0</td><td>Yes</td></tr>
+      <tr><td>Encoder-only transformer</td><td class="num">42.7</td><td class="num">44.0</td><td class="num">45.0</td><td class="num">45.6</td><td class="num">46.6</td><td>No</td></tr>
+      <tr><td>TimesFM (zero-shot, price only)</td><td class="num">48.3</td><td class="num">53.3</td><td class="num">59.4</td><td class="num">60.2</td><td class="num">57.8</td><td>No</td></tr>
+      <tr><td>PatchTST</td><td class="num">59.4</td><td class="num">64.7</td><td class="num">66.4</td><td class="num">65.0</td><td class="num">63.6</td><td>No</td></tr>
+      <tr class="bench"><td>AEMO pre-dispatch (NEM)</td><td class="num">65.6</td><td class="num">82.7</td><td class="num">116.0</td><td class="num">109.6</td><td class="num">114.6</td><td>It is the covariate</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2">
+    <div>
+      <p class="small"><b>QLD1 nMAPE % (Table 5), models retrained on QLD targets.</b></p>
+      <table>
+        <thead><tr><th>Model</th><th class="num">2 h</th><th class="num">4 h</th><th class="num">8 h</th><th class="num">12 h</th><th class="num">16 h</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>Decoder-only</td><td class="num">29.2</td><td class="num">30.6</td><td class="num">31.2</td><td class="num">31.9</td><td class="num">32.2</td></tr>
+          <tr><td>Encoder-decoder</td><td class="num">30.0</td><td class="num">31.3</td><td class="num">31.7</td><td class="num">32.0</td><td class="num">32.7</td></tr>
+          <tr><td>TFT</td><td class="num">29.3</td><td class="num">32.1</td><td class="num">35.3</td><td class="num">37.2</td><td class="num">36.5</td></tr>
+          <tr><td>LSTM</td><td class="num">30.3</td><td class="num">32.0</td><td class="num">34.5</td><td class="num">34.9</td><td class="num">35.5</td></tr>
+          <tr><td>Encoder-only</td><td class="num">42.2</td><td class="num">43.6</td><td class="num">45.3</td><td class="num">45.0</td><td class="num">45.1</td></tr>
+          <tr><td>PatchTST</td><td class="num">60.3</td><td class="num">77.5</td><td class="num">97.6</td><td class="num">94.3</td><td class="num">99.0</td></tr>
+          <tr><td>TimesFM</td><td class="num">62.1</td><td class="num">82.5</td><td class="num">104.3</td><td class="num">99.0</td><td class="num">105.6</td></tr>
+          <tr class="bench"><td>AEMO pre-dispatch</td><td class="num">57.0</td><td class="num">79.1</td><td class="num">120.4</td><td class="num">124.7</td><td class="num">121.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <p class="small"><b>VIC1 nMAPE % (Table 6). The only region where AEMO wins at 2 h and where TFT beats the plain transformers.</b></p>
+      <table>
+        <thead><tr><th>Model</th><th class="num">2 h</th><th class="num">4 h</th><th class="num">8 h</th><th class="num">12 h</th><th class="num">16 h</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>TFT</td><td class="num">36.3</td><td class="num">37.7</td><td class="num">37.7</td><td class="num">39.6</td><td class="num">39.6</td></tr>
+          <tr><td>Encoder-decoder</td><td class="num">38.0</td><td class="num">38.8</td><td class="num">39.2</td><td class="num">40.5</td><td class="num">41.3</td></tr>
+          <tr><td>Decoder-only</td><td class="num">37.3</td><td class="num">38.9</td><td class="num">40.3</td><td class="num">40.8</td><td class="num">41.7</td></tr>
+          <tr><td>LSTM</td><td class="num">39.7</td><td class="num">42.1</td><td class="num">44.1</td><td class="num">44.8</td><td class="num">45.2</td></tr>
+          <tr><td>Encoder-only</td><td class="num">61.3</td><td class="num">63.0</td><td class="num">64.7</td><td class="num">64.7</td><td class="num">65.4</td></tr>
+          <tr><td>PatchTST</td><td class="num">82.9</td><td class="num">95.1</td><td class="num">105.1</td><td class="num">101.6</td><td class="num">107.7</td></tr>
+          <tr><td>TimesFM</td><td class="num">85.2</td><td class="num">100.3</td><td class="num">112.3</td><td class="num">107.2</td><td class="num">114.5</td></tr>
+          <tr class="bench"><td>AEMO pre-dispatch</td><td class="num"><b>35.7</b></td><td class="num">41.0</td><td class="num">60.3</td><td class="num">59.3</td><td class="num">61.4</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="small"><b>NSW1 MAE in A$/MWh (Table A2) and the spike / non-spike split (Table A1, spike = the 32-step window contains at least one price of A$5,000 or more).</b></p>
+  <table>
+    <thead><tr><th>Model</th><th class="num">MAE 2 h</th><th class="num">MAE 8 h</th><th class="num">MAE 16 h</th><th class="num">nMAPE 2 h spike</th><th class="num">2 h non-spike</th><th class="num">nMAPE 16 h spike</th><th class="num">16 h non-spike</th></tr></thead>
+    <tbody>
+      <tr class="best"><td>Decoder-only</td><td class="num">42.16</td><td class="num">46.01</td><td class="num">49.01</td><td class="num">70.8</td><td class="num">23.9</td><td class="num">82.2</td><td class="num">27.8</td></tr>
+      <tr><td>TFT</td><td class="num">45.53</td><td class="num">48.10</td><td class="num">51.02</td><td class="num">84.6</td><td class="num">23.7</td><td class="num">85.9</td><td class="num">28.8</td></tr>
+      <tr><td>Encoder-decoder</td><td class="num">47.48</td><td class="num">47.81</td><td class="num">50.69</td><td class="num">82.4</td><td class="num">26.2</td><td class="num">85.0</td><td class="num">28.7</td></tr>
+      <tr><td>LSTM</td><td class="num">47.83</td><td class="num">52.50</td><td class="num">55.59</td><td class="num">80.1</td><td class="num">27.2</td><td class="num">83.6</td><td class="num">34.0</td></tr>
+      <tr><td>TimesFM</td><td class="num">60.61</td><td class="num">74.34</td><td class="num">72.32</td><td class="num">73.1</td><td class="num">41.9</td><td class="num">90.3</td><td class="num">49.2</td></tr>
+      <tr><td>PatchTST</td><td class="num">74.50</td><td class="num">83.07</td><td class="num">79.62</td><td class="num">87.3</td><td class="num">52.1</td><td class="num">87.7</td><td class="num">57.2</td></tr>
+      <tr class="bench"><td>AEMO pre-dispatch</td><td class="num">82.25</td><td class="num">145.20</td><td class="num">143.47</td><td class="num">104.9</td><td class="num">55.3</td><td class="num">105.1</td><td class="num">117.1</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> Three findings survive the tables. First, anything that ingests the pre-dispatch forecast beats anything that does not, by 20 to 50 points of nMAPE; the architecture choice among the covariate-aware models is worth only 1 to 5 points. Second, the decoder-only model, which is essentially "learn a nonlinear correction to AEMO's forecast and the weather forecast", is the best or joint best in two of three regions. Third, spike windows are still bad for everyone: 70 to 88 % nMAPE against 24 to 29 % on normal windows, and the paper says the models time spikes but underestimate their size. Every model beats AEMO on the Diebold-Mariano test at 95 % (statistics from −4.0 to −7.1). AEMO pre-dispatch is not a statistical forecast by design; it is a dispatch-engine output that changes with every rebid, so its nMAPE above 100 % at 8 h or more mostly reflects transient A$15,000 to A$20,000 prints.</p>
+
+  <h4>Architecture: the encoder-decoder transformer (Figure 3) and the five variants (Figure 4)</h4>
+  <div class="diagram"><div id="d-sinclair"></div>
+    <div class="legend"><span class="li">input</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Parallel decoding means all 32 future half-hours are predicted in one forward pass. The autoregressive variants feed each predicted step back in as input for the next, which was slower and slightly worse here.</div>
+  </div>
+  <div class="diagram"><div id="d-variants"></div>
+    <div class="cap">The five variants tested. Grey-out shows what each variant cannot see. Decoder-only drops the 48-hour history entirely and still wins in NSW and QLD, because AEMO's pre-dispatch already summarises the state of the system.</div>
+  </div>
+  <div class="diagram"><div id="d-baselines"></div>
+    <div class="cap">The comparison models (Figure 5 in the paper). TFT and the LSTM see the same future covariates as the transformers; PatchTST and TimesFM see only the past, and TimesFM sees only the price.</div>
+  </div>
+  <h4>Walk one forecast through the decoder-only model</h4>
+  <ol class="steps">
+    <li>It is 16:00. Collect the 32 rows for 16:30 to 08:00 tomorrow: for each, AEMO's pre-dispatch RRP and demand for NSW and the other regions, the forecast interchange, the Open-Meteo forecast temperature, cloud, humidity and wind for Sydney, the workday flag, the half-hour / weekday / month sines and cosines, and hours-to-delivery. Scale each column with the quantile transformer fitted on the training years.</li>
+    <li>Project each row to 128 numbers and add the positional encoding. Run three transformer layers: in each, every future row attends to every other future row (so the 18:00 row can see that pre-dispatch expects a ramp from 17:00 and a fall by 20:00), then a feed-forward network adjusts each row.</li>
+    <li>Layer-normalise and apply one linear layer per row: 32 prices out, in scaled units; invert the scaler. The 2 h entry in the table is row 4 (18:00), the 16 h entry is row 32.</li>
+    <li>Half an hour later, at 16:30, do it again with the new pre-dispatch run. Over 9,858 such origins in the test period, the average |actual − predicted| at row 4 divided by the average price was 33.6 %; for AEMO's own row-4 number it was 65.6 %.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.3390/app16010075">doi 10.3390/app16010075</a> (open access, all tables read directly) ·
+    <a href="https://www.kaggle.com/datasets/markwsinclair/nempricesweather2022to2025">Kaggle dataset</a> ·
+    <a href="https://nem.redaxe.com">Live forecast API</a>
+  </div></details>
+</div>
+
+<h2 id="excluded"><span class="part-label">Directory</span>What was left out, and why</h2>
+<ul>
+  <li><b>Kang &amp; Wang 2025, "A Transformer-Based Framework for Explainable Electricity Market Dynamics" (CMSS 2025)</b>, reference 22 in Sinclair. Its inputs are price, sales volume, revenue and customer count, which is a retail-tariff dataset, not the NEM. Excluded.</li>
+  <li><b>Gong (MCPformer, China), Han &amp; Wang (PJM), the Spanish GNN paper, Bottieau (Belgium), Cantillo-Luna (Colombia), Abdellatif (Nord Pool), Xu (VMD-TCN-GRU)</b>: not Australian markets. Excluded by the brief.</li>
+  <li><b>Not cited by Sinclair but directly relevant</b>: "Deep Time-Series Models Meet Volatility: Multi-Horizon Electricity Price Forecasting in the Australian NEM" (arXiv 2602.01157, Feb 2026) benchmarks LSTM, CNN-LSTM and Transformer against newer time-series architectures across all five regions and finds the simple LSTM / CNN-LSTM often win; and "NSW-EPNews" (arXiv 2506.11050) tests LLMs with news text on NSW prices and finds they do not beat classical baselines. Both are worth reading beside Liu 2024 and Sinclair 2026.</li>
+</ul>
+<p class="small">Compiled 21 September 2026. Companion page: <a href="rnn_explainer.html">LSTM, GRU and TCN: a worked numerical walkthrough</a>.</p>
+
+</main>

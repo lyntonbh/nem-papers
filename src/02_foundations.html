@@ -1,0 +1,114 @@
+
+<h2 id="part1"><span class="part-label">Part 1</span>How a price forecast is set up and judged</h2>
+<p>Before any model, three things decide whether a paper's numbers mean anything: what exactly is being predicted from what, how the data were split, and which error score is reported. All the metrics below are worked on the same six half-hours of a made-up NSW evening so you can check them by hand.</p>
+
+<div class="concept" id="c-nem">
+  <h3>The NEM objects that appear in every paper</h3>
+  <div class="kv">
+    <div>RRP (regional reference price)</div><div>The spot price, in A$/MWh, set every five minutes for each of the five regions (NSW1, QLD1, VIC1, SA1, TAS1) by AEMO's dispatch engine. Most papers average it to half-hours. It is bounded by a market floor (−A$1,000) and a market price cap (A$17,500 in 2024-25), so "spikes" of A$5,000 to A$17,500 are real, settled prices.</div>
+    <div>Pre-dispatch (PD)</div><div>AEMO's own forward projection of price and demand for every half-hour up to the end of the next trading day, re-published every half-hour from the bids generators have submitted. It is what Sinclair benchmarks against and, crucially, feeds into the model as a known-future input. It is not a statistical forecast: it is the dispatch engine run on current bids, so it changes whenever a generator rebids.</div>
+    <div>FCAS</div><div>Frequency control ancillary services: eight side-markets where a battery is paid to stand ready to inject or absorb power within 6 seconds, 60 seconds or 5 minutes (three "raise" and three "lower" contingency services) plus two regulation services. Li 2024 bids into the six contingency ones alongside the spot market.</div>
+    <div>Market notices, LOR</div><div>Free-text bulletins AEMO publishes when something is happening: lack-of-reserve (LOR1, LOR2, LOR3) warnings, constraint changes, directions. They often precede spikes by hours, which is why Liu 2024 mines them with a language model.</div>
+    <div>Interconnector flow</div><div>MW moving between regions. When a line is at its limit the regions' prices separate, which is one cause of single-region spikes.</div>
+  </div>
+</div>
+
+<div class="concept" id="c-setup">
+  <h3>The forecasting problem: lags, horizon, covariates</h3>
+  <p class="one"><b>In one sentence.</b> A forecaster is a function from a window of past values (and anything else known now) to one or more future values; the paper's choice of window, horizon and "anything else" is the whole design.</p>
+  <p><b>Lags</b> are the past values fed in: "6 lags" means the last six values. The <b>look-back window</b> is how far back they go (Sinclair: 96 half-hours = 48 h). The <b>horizon</b> is how far ahead the output reaches (Sinclair: 32 half-hours = 16 h, scored at 2, 4, 8, 12 and 16 h). A <b>covariate</b> is any input other than the target itself, and the vital distinction is between <b>past-only</b> covariates (yesterday's temperature) and <b>known-future</b> covariates (tomorrow's temperature forecast, AEMO's pre-dispatch price), because only the second kind can tell the model about tomorrow directly.</p>
+  <div class="diagram"><div id="d-setup"></div><div class="cap">Time runs left to right. The forecast origin is "now". Everything to the left is available; to the right, only known-future covariates are available. The target row to the right is what gets scored.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    A model made at 16:00 with a 4-step look-back and a 3-step horizon sees prices at 14:00, 14:30, 15:00, 15:30 (lags), the pre-dispatch prices for 16:30, 17:00, 17:30 (known-future covariates), and must output prices for 16:30, 17:00, 17:30. The 17:30 output is "3 steps ahead" or "1.5 h ahead". Sinclair's "8 h horizon" row is the error of the 16th output step only, not the average of the first sixteen.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "Day-ahead" in Tan 2023 means the 48 half-hours of tomorrow forecast from today; "16 h ahead" in Sinclair means a rolling forecast made every half-hour. They are different tasks with different difficulty, so their MAPEs are not comparable.</div>
+</div>
+
+<div class="concept" id="c-split">
+  <h3>Train, validation, test, and walk-forward validation</h3>
+  <p class="one"><b>In one sentence.</b> A model is fitted on the training set, its knobs are chosen on the validation set, and its reported score must come from a test set of later dates it never saw.</p>
+  <p>With time series the split must be chronological. If random rows are held out, the model has seen the half-hour before and after every test point and the score is meaningless. <b>Walk-forward validation</b> (also "rolling origin") goes further: fit on months 1 to 12, validate on month 13; fit on 1 to 13, validate on 14; and so on, then average. It mimics how the model would actually be used and it exposes a model that only works in one season.</p>
+  <div class="diagram"><div id="d-split"></div><div class="cap">Sinclair's 80:20 split of 49,447 half-hours (37,085 train, 2,440 validation, 9,858 test) and, underneath, the five-fold walk-forward scheme used to pick hyperparameters.</div></div>
+  <div class="ex"><div class="exh">Why it matters here</div>
+    Tan 2023 tests on four windows of three days each, about 0.7 % of the data, chosen one per season. Ghimire 2024 tests on the single year 2022. Sinclair tests on the last 20 % of Nov 2022 to Aug 2025, roughly Feb to Aug 2025, which includes a volatile winter. A three-day window can be lucky; a whole test year cannot, but a single year can still be atypical.
+  </div>
+</div>
+
+<div class="concept" id="c-leak">
+  <h3>Look-ahead leakage</h3>
+  <p class="one"><b>In one sentence.</b> Leakage is any way that information from after the forecast origin sneaks into an input, and it produces scores that are too good and impossible to reproduce live.</p>
+  <p>The two ways it happens in these papers: <b>(1)</b> a transform (wavelet, EMD, scaling) is computed over the whole series at once, so the "past" component at time t was calculated using values after t; <b>(2)</b> a covariate is taken from actual observations instead of the forecast that would have existed at the time (using yesterday's actual temperature for yesterday is fine; using tomorrow's actual temperature for tomorrow is leakage).</p>
+  <div class="diagram"><div id="d-leak"></div><div class="cap">A symmetric smoothing filter at time t (the purple window) averages values on both sides of t. Applied to the whole series before splitting, the smoothed "input" at t already contains t+1 and t+2.</div></div>
+  <div class="note warn">Sinclair uses AEMO's <em>forecast</em> weather and <em>pre-dispatch</em> price for the future rows, which are legitimately known at the origin. Ghimire 2024's wavelet pre-processing is the one place on this page where leakage of type (1) is a live question; the abstract does not say whether the transform was applied causally. A 2025 follow-up from a different group makes exactly this criticism of the decomposition-then-forecast pattern.</div>
+</div>
+
+<div class="concept" id="c-errors">
+  <h3>The example series used for every metric below</h3>
+  <p>Six half-hours on an imaginary NSW evening, with a forecast that catches the peak but under-calls it.</p>
+  <div id="t-errors"></div>
+  <p class="small">e = actual − forecast. All later metric boxes use these six rows and are computed by the page.</p>
+</div>
+
+<div class="concept" id="c-mae">
+  <h3>MAE and RMSE</h3>
+  <p class="one"><b>In one sentence.</b> MAE is the typical size of a miss in dollars; RMSE is the same but squares each miss first, so one big spike miss dominates it.</p>
+  <span class="formula">MAE = mean(|e|)</span> <span class="formula">RMSE = sqrt(mean(e²))</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    |e| = <span data-v="m.abse"></span>, mean = <span class="v" data-v="m.mae"></span> A$/MWh. e² = <span data-v="m.sqe"></span>, mean = <span data-v="m.mse"></span>, square root = <span class="v" data-v="m.rmse"></span> A$/MWh. RMSE is <span data-v="m.rmseratio"></span>× MAE here; the ratio is 1 only when every miss is the same size, and grows with how spiky the misses are. Sinclair reports MAE (Table A2); Ghimire 2023 and the review's Tan and Ghimire 2024 rows report both.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> A model with low RMSE is not necessarily "better at spikes". RMSE is dominated by spike misses, so a model that never forecasts a spike but sits close to the mean can still have decent RMSE. To see spike skill you need a split like Sinclair's Table A1 (spike windows vs non-spike windows).</div>
+</div>
+
+<div class="concept" id="c-mape">
+  <h3>MAPE, RMSPE and nMAPE</h3>
+  <p class="one"><b>In one sentence.</b> MAPE divides each miss by that half-hour's actual price before averaging, which makes cheap half-hours count as much as expensive ones and blows up when the price is near zero; nMAPE instead divides the average miss by the average price.</p>
+  <span class="formula">MAPE = 100 · mean(|e| / |y|)</span> <span class="formula">RMSPE = 100 · sqrt(mean((e / y)²))</span> <span class="formula" id="c-nmape">nMAPE = 100 · mean(|e|) / mean(y) = 100 · MAE / ȳ</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    Per-row |e|/y = <span data-v="m.ape"></span>, so MAPE = <span class="v" data-v="m.mape"></span> %. RMSPE = <span class="v" data-v="m.rmspe"></span> %. Mean price ȳ = <span data-v="m.ybar"></span>, so nMAPE = 100 × <span data-v="m.mae"></span> / <span data-v="m.ybar"></span> = <span class="v" data-v="m.nmape"></span> %. Now change one actual to A$1 with a forecast of A$6: MAPE jumps to <span class="v" data-v="m.mape_zero"></span> % because one row contributes 500 %, while nMAPE only moves to <span class="v" data-v="m.nmape_zero"></span> %. NEM prices go negative in the middle of the day, so ordinary MAPE is unusable on raw NEM data, which is why Sinclair defines nMAPE and why Tan and Ghimire report MAPE only after normalising or on selected windows.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> Sinclair's "AEMO 116 % nMAPE at 8 h" does not mean AEMO is off by 116 % of each price. It means AEMO's average absolute miss is 1.16 times the average price, mostly because pre-dispatch occasionally prints a A$15,000 forecast that does not eventuate (see the <a class="t" href="#c-nem">pre-dispatch</a> entry).</div>
+</div>
+
+<div class="concept" id="c-corr">
+  <h3>Correlation r and R²</h3>
+  <p class="one"><b>In one sentence.</b> r measures whether forecast and actual go up and down together, on a −1 to 1 scale, and ignores whether the level or the scale is right; R² is r² when the forecast is unbiased and tells you the fraction of variance explained.</p>
+  <span class="formula">r = Σ(y−ȳ)(ŷ−ŷ̄) / sqrt(Σ(y−ȳ)² · Σ(ŷ−ŷ̄)²)</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    r = <span class="v" data-v="m.r"></span>, R² = <span class="v" data-v="m.r2"></span>. Now halve every forecast (so it is badly wrong in level): r is still <span data-v="m.r_half"></span>, because correlation cannot see scale. That is why Ghimire reports KGE next to r.
+  </div>
+</div>
+
+<div class="concept" id="c-kge">
+  <h3>KGE: Kling-Gupta efficiency</h3>
+  <p class="one"><b>In one sentence.</b> KGE checks three things at once, whether the forecast tracks the actual (correlation r), whether it has the right amount of variability (ratio of standard deviations, α), and whether it has the right average level (ratio of means, β), and reports how far the triple (r, α, β) is from the perfect (1, 1, 1).</p>
+  <span class="formula">α = sd(ŷ) / sd(y)</span> <span class="formula">β = mean(ŷ) / mean(y)</span> <span class="formula">KGE = 1 − sqrt((r − 1)² + (α − 1)² + (β − 1)²)</span>
+  <p>It comes from hydrology, where models that get the average flow right but flatten the floods are a known failure; the same failure happens with price spikes. A value of 1 is perfect; 0 is roughly "as good as forecasting the mean every time"; below about 0.5 is poor. Because α punishes under-dispersion, a forecast that never spikes is penalised even if its MAE is fine.</p>
+  <div class="diagram"><div id="d-kge"></div><div class="cap">KGE as a distance in three dimensions. The example forecast sits at the dot; the perfect score is the origin of the axes at (1, 1, 1).</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    r = <span data-v="m.r"></span>. sd(y) = <span data-v="m.sdy"></span>, sd(ŷ) = <span data-v="m.sdf"></span>, so α = <span class="v" data-v="m.alpha"></span> (the forecast is <span data-v="m.alphapct"></span> % as variable as reality, because it under-called the spike). mean(y) = <span data-v="m.ybar"></span>, mean(ŷ) = <span data-v="m.fbar"></span>, so β = <span class="v" data-v="m.beta"></span>. Distance = sqrt((<span data-v="m.r"></span> − 1)² + (<span data-v="m.alpha"></span> − 1)² + (<span data-v="m.beta"></span> − 1)²) = <span data-v="m.kgedist"></span>, so KGE = <span class="v" data-v="m.kge"></span>. Ghimire 2024's 0.972 for the whole of 2022 means all three components were within a few percent of perfect on that year.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> KGE and r can disagree sharply. A forecast equal to 0.5 × actual has r = 1 but α = 0.5 and β = 0.5, giving KGE = 1 − sqrt(0 + 0.25 + 0.25) = 0.29.</div>
+</div>
+
+<div class="concept" id="c-gpi">
+  <h3>GPI: global performance indicator, and the other agreement indices</h3>
+  <p class="one"><b>In one sentence.</b> GPI is a home-made composite: take several metrics, rescale each to 0 to 1 across the models being compared, flip the ones where lower is better, and add them up, so it ranks models within one paper and means nothing outside it.</p>
+  <p>The Ghimire papers also report Willmott's index (WI, 0 to 1, a normalised squared-error score), the Nash-Sutcliffe efficiency (NSE, 1 minus squared error over variance, so 0 means "no better than the mean"), the Legates-McCabe index (same idea with absolute errors, stricter), Theil's U (RMSE relative to the size of the series), and a "promoting percentage" (percent improvement over each baseline). They all move together; the paper's own summary is that TNET was first on all of them at three of four sites.</p>
+  <div class="ex"><div class="exh">Worked example of a GPI-style composite</div>
+    Three models with (MAE, r): A (10, 0.90), B (14, 0.95), C (12, 0.80). Rescale MAE to "lower is better" on 0 to 1: A 1.0, B 0.0, C 0.5. Rescale r: A 0.67, B 1.0, C 0.0. Sum: A 1.67, B 1.0, C 0.5. A wins, but only relative to B and C; add a fourth model and every number changes. That is why the GPI values on Ghimire 2024's card (1.61, 1.33, 1.85, 1.30, 0.78) cannot be compared to anything else.
+  </div>
+</div>
+
+<div class="concept" id="c-dm">
+  <h3>The Diebold-Mariano test</h3>
+  <p class="one"><b>In one sentence.</b> It asks whether the difference in error between two forecasts is bigger than the noise in that difference, using the fact that errors on consecutive half-hours are correlated.</p>
+  <ol class="steps">
+    <li>For each test half-hour t, compute the loss of each forecast, usually |e|, and their difference d<sub>t</sub> = |e<sub>A,t</sub>| − |e<sub>B,t</sub>|.</li>
+    <li>Take the mean d̄. If A is better, d̄ is negative.</li>
+    <li>Estimate the standard error of d̄ allowing for autocorrelation (a Newey-West style variance).</li>
+    <li>DM = d̄ / standard error. Beyond ±1.96 is significant at 5 %; beyond ±2.58 at 1 %.</li>
+  </ol>
+  <div class="ex"><div class="exh">Worked example</div>
+    Two forecasts on eight half-hours with absolute errors A = <span data-v="dm.a"></span> and B = <span data-v="dm.b"></span>. d = <span data-v="dm.d"></span>, d̄ = <span class="v" data-v="dm.mean"></span>, sd(d) = <span data-v="dm.sd"></span>, standard error (ignoring autocorrelation for eight points) = <span data-v="dm.se"></span>, DM = <span class="v" data-v="dm.stat"></span>. That is not significant with eight points. Sinclair's DM statistics against AEMO are −4.0 to −7.1 on 9,858 test half-hours, with p-values around 10<sup>−5</sup> to 10<sup>−12</sup>: every model, even PatchTST, is significantly better than pre-dispatch.
+  </div>
+</div>

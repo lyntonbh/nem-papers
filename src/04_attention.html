@@ -1,0 +1,115 @@
+
+<h2 id="part3"><span class="part-label">Part 3</span>Attention and the transformer family</h2>
+<p>A recurrent network reaches the past through a chain of memory updates. Attention reaches it directly: every output position computes a weight for every input position and takes the weighted average. Everything in this part is a variation on that one operation.</p>
+
+<div class="concept" id="c-softmax">
+  <h3>Softmax: turning scores into weights that sum to 1</h3>
+  <p class="one"><b>In one sentence.</b> Softmax exponentiates each score and divides by the total, so bigger scores get disproportionately bigger shares and the shares add to exactly 1.</p>
+  <span class="formula">softmax(s)<sub>i</sub> = exp(s<sub>i</sub>) / Σ<sub>j</sub> exp(s<sub>j</sub>)</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    Scores (2.0, 1.0, 0.1): exponentials <span data-v="sm.exp"></span>, total <span data-v="sm.sum"></span>, weights <span class="v" data-v="sm.w"></span>. The top score gets two-thirds of the weight, not half. Multiply all scores by 3 and the weights become <span data-v="sm.w3"></span>: sharper. That is why attention divides scores by √d (the vector length): to keep them from getting so large that the softmax becomes a hard argmax with no gradient.
+  </div>
+</div>
+
+<div class="concept" id="c-attn">
+  <h3>Attention: queries, keys, values, and heads</h3>
+  <p class="one"><b>In one sentence.</b> Each position produces three vectors from its input, a query (what am I looking for), a key (what do I contain) and a value (what I hand over); an output position scores every input by query·key, softmaxes the scores into weights, and outputs the weighted sum of the values.</p>
+  <span class="formula">Attention(Q, K, V) = softmax(Q Kᵀ / √d) V</span>
+  <p><b>Self-attention</b>: queries, keys and values all come from the same sequence (the past looks at the past). <b>Cross-attention</b>: queries come from one sequence (the future steps) and keys/values from another (the encoded past). <b>Multi-head</b>: run h copies with different learned projections and concatenate; each head can specialise (one on "same time yesterday", one on "last two hours"). <b>Causal mask</b>: in decoder self-attention, position t is forbidden from attending to positions after t, so an autoregressive model cannot peek ahead.</p>
+  <div class="diagram"><div id="d-attn"></div><div class="cap">One query (the 18:00 forecast step) scoring three past half-hours. The bars are the softmaxed weights; the output is the weighted sum of the values.</div></div>
+  <div class="ex"><div class="exh">Worked example, fully computed with 2-dimensional vectors</div>
+    Query q = <span data-v="at.q"></span>. Keys: k₁ = <span data-v="at.k1"></span> (17:30 yesterday, high price), k₂ = <span data-v="at.k2"></span> (last half-hour), k₃ = <span data-v="at.k3"></span> (3 am, low). Values are the scaled prices at those times, v = <span data-v="at.v"></span>.<br>
+    Scores q·k / √2 = <span data-v="at.s"></span>. Softmax → weights <span class="v" data-v="at.w"></span>. Output = Σ w v = <span class="v" data-v="at.out"></span> (× 100 = A$<span data-v="at.out100"></span>). The 3 am price got almost no say because its key did not match the query. Training learns the projections that make queries and keys line up usefully; nothing about "17:30 yesterday matters" is hard-coded.
+  </div>
+  <div class="diagram"><div id="d-attnmap"></div><div class="cap">What a whole attention matrix looks like for four future steps attending over six past half-hours and four pre-dispatch rows. In Sinclair's SHAP analysis the pre-dispatch columns carry most of the weight; this map is drawn to show that pattern.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> Attention weights are not feature importance. They say which positions were averaged, not which inputs changed the answer; that is what <a class="t" href="#c-shap">SHAP</a> is for.</div>
+</div>
+
+<div class="concept" id="c-pos">
+  <h3>Positional encoding and Time2Vec</h3>
+  <p class="one"><b>In one sentence.</b> Attention treats its inputs as a bag with no order, so each position gets a vector added to it that encodes where (or when) it is; the classic recipe is a set of sines and cosines at different frequencies, and Time2Vec is the same idea with the frequencies learned.</p>
+  <p>The sinusoidal encoding for position p uses sin(p / 10000<sup>2i/d</sup>) and cos(...) for i = 0 … d/2, so low dimensions oscillate fast (distinguish neighbours) and high dimensions slowly (distinguish far apart). Sinclair adds this to both encoder and decoder inputs and additionally feeds explicit calendar features (sine and cosine of half-hour-of-day, day-of-week, month) so the model knows the time of day directly, not just the position in the window. <b>Time2Vec</b> (Ghimire 2023) replaces the fixed table with one linear term plus k learned sinusoids, t2v(τ) = [ω₀τ + φ₀, sin(ω₁τ + φ₁), …], so the network can discover a daily and a weekly frequency itself.</p>
+  <div class="diagram"><div id="d-pos"></div><div class="cap">Three of the sinusoidal channels over 48 positions, and the daily sine/cosine pair that Sinclair uses so that 23:30 and 00:00 are near each other.</div></div>
+</div>
+
+<div class="concept" id="c-tlayer">
+  <h3>One transformer layer, and a stack of them</h3>
+  <p class="one"><b>In one sentence.</b> A layer is multi-head attention, then a small two-layer feed-forward network applied to each position separately, each wrapped in a residual connection and a layer normalisation; a transformer is N of these in a row.</p>
+  <p>The sizes you see in Sinclair's Table 2: <b>d_model</b> = 128 is the width of every position's vector; <b>heads</b> = 4 means four 32-wide attention heads; <b>ff_dim</b> = 512 is the hidden width of the per-position feed-forward network; <b>layers</b> = 3 is the stack depth; <b>dropout</b> = 0.05. "Tiny" to "large" scale these from 64/2/256/2 up to 512/8/2048/4, and the small one won, which the paper attributes to the dataset's size (about 37,000 training windows).</p>
+  <div class="diagram"><div id="d-tlayer"></div><div class="cap">Pre-LayerNorm layout (Sinclair's Figure 3): normalise, attend, add the skip; normalise, feed-forward, add the skip. The feed-forward part is where most of the parameters live.</div></div>
+</div>
+
+<div class="concept" id="c-encdec">
+  <h3>Encoder-decoder, encoder-only, decoder-only; parallel versus autoregressive decoding</h3>
+  <p class="one"><b>In one sentence.</b> The encoder is a transformer over the past; the decoder is a transformer over the future positions that also cross-attends to the encoder's output; you can keep both, only the encoder (then regress the future from a pooled or flattened past), or only the decoder (then the future positions attend only to themselves and their known-future covariates).</p>
+  <div class="diagram"><div id="d-encdec"></div><div class="cap">The three shapes. In decoder-only, the only information about the past is whatever is inside the known-future covariates (for the NEM: AEMO's pre-dispatch, which was itself computed from the current state of the system).</div></div>
+  <p><b>Parallel (non-autoregressive) decoding</b>: the decoder is given all 32 future covariate rows at once and emits all 32 prices in one forward pass. <b>Autoregressive decoding</b>: emit step 1, append it to the decoder input, emit step 2, and so on, 32 passes; during training the true previous values are fed instead of the predicted ones ("teacher forcing"), which is a mismatch with how it runs live and one reason Sinclair's autoregressive variants were 2 to 4 points worse and slower.</p>
+  <div class="ex"><div class="exh">Reading Sinclair's five variants</div>
+    (a) enc-dec parallel, (b) enc-dec autoregressive, (c) encoder-only, (d) decoder-only parallel, (e) decoder-only autoregressive. NSW 2 h nMAPE: 37.9, 40.8, 42.7, <b>33.6</b>, 38.7. The two facts to take away: dropping the encoder (c → d comparison is the wrong one; compare a → d) <em>improved</em> the score, and dropping the future covariates (c) cost 5 to 9 points. History is nearly redundant once you have pre-dispatch.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "Decoder-only" here is not the GPT sense of "predict the next token from previous tokens". Sinclair's decoder-only model has no autoregression in variant (d); it is a transformer over 32 rows of forecast covariates that outputs 32 prices. The name refers to which half of the original architecture is kept.</div>
+</div>
+
+<div class="concept" id="c-covariates">
+  <h3>Known-future covariates: why the pre-dispatch column decides everything</h3>
+  <p class="one"><b>In one sentence.</b> A covariate that is known for the forecast horizon (a weather forecast, a calendar flag, AEMO's pre-dispatch) can be handed to the decoder row by row, and any model that can accept such rows will beat any model that cannot, whatever its architecture.</p>
+  <div id="t-cov"></div>
+  <p>Sinclair's SHAP result: the pre-dispatch NSW price contributes more than 60 % of total feature importance; forecast demand, interconnector flows and other regions' pre-dispatch prices come next; the 48 hours of history contribute "comparatively little". PatchTST and TimesFM have no way to accept the right-hand columns, and they score 57 to 116 % nMAPE against 34 to 44 % for everything that can.</p>
+</div>
+
+<div class="concept" id="c-tft">
+  <h3>Temporal Fusion Transformer (TFT)</h3>
+  <p class="one"><b>In one sentence.</b> TFT is a forecasting-specific design that learns a weight for every input variable (variable selection), runs an LSTM over past and future rows for local order, applies one interpretable attention layer for long-range structure, gates any block that is not helping, and outputs quantiles.</p>
+  <ol class="steps">
+    <li><b>Variable selection network.</b> For each time step, a softmax over the input variables gives each a weight; the weighted sum is what the rest of the model sees. The weights are a built-in importance report.</li>
+    <li><b>LSTM encoder-decoder.</b> Reads the past rows, then the known-future rows, producing a local context per step.</li>
+    <li><b>Gated residual network (GRN).</b> Every block is wrapped in a learned gate that can pass its input straight through; the model can effectively turn off the attention layer if the LSTM alone suffices.</li>
+    <li><b>Interpretable multi-head attention.</b> One attention layer over the whole window, with the heads' value projections shared so their weights can be averaged and read.</li>
+    <li><b>Quantile outputs.</b> Trained with the <a class="t" href="#c-quantile">pinball loss</a> at q = 0.1, 0.5, 0.9, so it emits a band.</li>
+  </ol>
+  <div class="diagram"><div id="d-tft"></div><div class="cap">TFT's data path. It handles static, past-only and known-future inputs separately, which is why it is the natural comparison model for the NEM problem.</div></div>
+  <div class="ex"><div class="exh">Where it landed</div>
+    TFT was within 1 to 3 points of the best transformer in NSW and QLD and was the best model in VIC (36.3 to 39.6 %). Its 0.5-quantile is what the tables score, so it competes on a point forecast while also giving the band the others lack.
+  </div>
+</div>
+
+<div class="concept" id="c-patchtst">
+  <h3>PatchTST: patches and channel independence</h3>
+  <p class="one"><b>In one sentence.</b> Cut the input window into overlapping patches of P steps with stride S, treat each patch as one token, run an encoder-only transformer over the tokens, and do this separately for each input series; a linear layer maps the encoded tokens to the horizon.</p>
+  <div class="diagram"><div id="d-patch"></div><div class="cap">Patching. Attention runs over 13 patch-tokens instead of 96 step-tokens, so it is cheaper and each token carries a local shape.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Sinclair's settings: window 96, patch 24, stride 6 → number of patches = (96 − 24) / 6 + 1 = <span class="v" data-v="pt.n"></span>. Each patch is linearly projected to d_model and given a positional encoding. <b>Channel independence</b> means the price, demand and temperature series each go through the same transformer separately and are only combined at the end, which makes the model robust but blind to interactions. Combined with <a class="t" href="#c-scaling">RevIN</a> and the inability to take future covariates, this is why PatchTST sat at 59 to 108 % nMAPE.
+  </div>
+</div>
+
+<div class="concept" id="c-informer">
+  <h3>Informer, ProbSparse attention, and the "Graph Patch Informer"</h3>
+  <p class="one"><b>In one sentence.</b> Informer is a long-horizon encoder-decoder transformer that makes attention cheap by only computing the full weight row for the few queries whose attention would be most peaked (ProbSparse), and shrinks the sequence between encoder layers (distilling); Malyala's GPI adds patching in front and a graph layer over the patches.</p>
+  <p>The sparsity trick: for each query, measure how far its score distribution is from uniform (a cheap approximation of KL divergence using a sample of keys). Queries that would attend almost uniformly contribute nothing useful, so give them the mean of the values instead of computing their row. Only the top u = c·ln(L) queries get real attention. Cost falls from L² to L·ln L.</p>
+  <div class="diagram"><div id="d-informer"></div><div class="cap">Left: full attention computes every row. Right: ProbSparse computes only the "active" query rows (dark) and fills the rest with the average value.</div></div>
+  <div class="ex" id="c-gnn"><div class="exh">Graph neural network (GNN), as used in "Graph Patch Informer" and in Han &amp; Wang's PJM paper</div>
+    A graph has nodes (say, the five NEM regions, or the patches of a window) and edges (interconnectors, or learned similarities). One GNN layer updates each node by combining its own vector with an aggregate of its neighbours' vectors, then applying a small network. Worked step with three regions and a simple mean aggregation: NSW = 100, QLD = 80, VIC = 120, edges NSW–QLD and NSW–VIC. New NSW = f(100, mean(80, 120)) = f(100, 100); new QLD = f(80, 100); new VIC = f(120, 100). Two layers let VIC's information reach QLD via NSW. In Malyala's model the exact graph is not described in the abstract; the caption-level evidence says it sits between the patches and the Informer attention.
+  </div>
+</div>
+
+<div class="concept" id="c-timesfm">
+  <h3>TimesFM: a time-series foundation model, used zero-shot</h3>
+  <p class="one"><b>In one sentence.</b> TimesFM is a decoder-only transformer that Google pre-trained on a very large collection of real and synthetic time series so that, given any new history, it produces a forecast without any training on that data.</p>
+  <p>Internally it patches the input (32 steps per input patch), predicts a longer output patch (128 steps) per step, and was trained with a causal mask so that any prefix of the context works. It has a <b>context</b> limit (512 to 2048 steps depending on version) and takes only the target series, no covariates. "Zero-shot" means exactly that: Sinclair did not fine-tune it and fed it only the price. <b>Fine-tuning</b> would mean continuing its training on NEM data; a covariate-aware version exists but was not used.</p>
+  <div class="diagram"><div id="d-timesfm"></div><div class="cap">Pre-train once on everything; then apply to any series. The trade-off is generality against the inability to use what makes the NEM predictable (pre-dispatch).</div></div>
+  <div class="ex"><div class="exh">Where it landed</div>
+    NSW nMAPE 48 to 60 %: better than AEMO beyond 4 h, worse than every trained model. Note the spike/non-spike split: on spike windows TimesFM's 2 h score (73.1) was the second best of all models, because when a spike is already under way in the context it extrapolates it, whereas the covariate models were pulled back toward pre-dispatch.
+  </div>
+</div>
+
+<div class="concept" id="c-llm">
+  <h3>Large language models, fine-tuning, LoRA and QLoRA</h3>
+  <p class="one"><b>In one sentence.</b> An LLM is a very large decoder-only transformer trained to predict the next text token; fine-tuning continues that training on your task; LoRA makes fine-tuning cheap by freezing the model and training small low-rank add-on matrices; QLoRA additionally stores the frozen model in 4-bit precision so it fits on one GPU.</p>
+  <p>A <b>token</b> is a word piece (roughly ¾ of a word). "Generative pre-trained" means trained on the web to continue text. In Liu 2024 an <b>open-access</b> model (the paper's index terms mention no specific one) is fine-tuned to read an AEMO notice and emit a structured record. <b>LoRA</b>: for a weight matrix W (say 4096 × 4096), learn two thin matrices A (4096 × r) and B (r × 4096) with r around 8 and use W + BA; only A and B are trained. <b>QLoRA</b>: keep W in 4-bit "NormalFloat", de-quantise on the fly, train the LoRA adapters in 16-bit.</p>
+  <div class="diagram"><div id="d-lora"></div><div class="cap">The frozen block plus the thin trainable adapters. Storage and training cost drop by roughly the ratio in the example.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    One attention weight matrix: 4096 × 4096 = <span data-v="lora.full"></span> parameters. LoRA with rank 8: 4096 × 8 + 8 × 4096 = <span class="v" data-v="lora.lora"></span> parameters, which is <span class="v" data-v="lora.pct"></span> % of the original. Across a 7-billion-parameter model the adapters are typically 10 to 40 million parameters. In 4-bit the frozen weights take 3.5 GB instead of 14 GB.<br>
+    Extraction example: input text "LOR2 forecast for the SA region from 17:30 to 19:00" → output record {region: SA, level: LOR2, start: 17:30, end: 19:00}. Stacking such records over time gives an "event" series that is 1 during a notice window and 0 otherwise, which the CNN-LSTM reads as another input channel.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> Liu's LLM does not forecast the price in the final system; it converts text to numbers. The abstract also mentions using LLMs "for an in-depth time-series analysis", which reads as an exploratory use for traders rather than the scored model.</div>
+</div>

@@ -1,0 +1,355 @@
+
+<script>
+(function(){
+  'use strict';
+  // ============================================================ helpers
+  function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function fmt(x,d){ if(typeof x!=='number') return x; return (Math.round(x*Math.pow(10,d))/Math.pow(10,d)).toFixed(d); }
+  function list(a,d){ return '[' + a.map(function(v){return fmt(v,d);}).join(', ') + ']'; }
+  function mean(a){ return a.reduce(function(s,v){return s+v;},0)/a.length; }
+  function sd(a){ var m=mean(a); return Math.sqrt(mean(a.map(function(v){return (v-m)*(v-m);}))); }
+  function corr(a,b){ var ma=mean(a),mb=mean(b),n=0,da=0,db=0; for(var i=0;i<a.length;i++){n+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)*(a[i]-ma);db+=(b[i]-mb)*(b[i]-mb);} return n/Math.sqrt(da*db); }
+  function softmax(s){ var m=Math.max.apply(null,s); var e=s.map(function(v){return Math.exp(v-m);}); var t=e.reduce(function(a,b){return a+b;},0); return e.map(function(v){return v/t;}); }
+  function solveLS(H,y,lam){ // normal equations with ridge lam, Gaussian elimination
+    var n=H.length,p=H[0].length,A=[],b=[];
+    for(var i=0;i<p;i++){A.push([]);b.push(0);for(var j=0;j<p;j++){var s=0;for(var k=0;k<n;k++)s+=H[k][i]*H[k][j];A[i].push(s+(i===j?lam:0));}for(var k2=0;k2<n;k2++)b[i]+=H[k2][i]*y[k2];}
+    for(var c=0;c<p;c++){var piv=c;for(var r=c+1;r<p;r++)if(Math.abs(A[r][c])>Math.abs(A[piv][c]))piv=r;var tmp=A[c];A[c]=A[piv];A[piv]=tmp;var tb=b[c];b[c]=b[piv];b[piv]=tb;for(var r2=c+1;r2<p;r2++){var f=A[r2][c]/A[c][c];for(var cc=c;cc<p;cc++)A[r2][cc]-=f*A[c][cc];b[r2]-=f*b[c];}}
+    var x=new Array(p);for(var i2=p-1;i2>=0;i2--){var s2=b[i2];for(var j2=i2+1;j2<p;j2++)s2-=A[i2][j2]*x[j2];x[i2]=s2/A[i2][i2];}return x;
+  }
+  var V={};
+  function setV(k,v){V[k]=v;}
+  function fillV(){ document.querySelectorAll('[data-v]').forEach(function(el){ var k=el.getAttribute('data-v'); if(k in V) el.textContent=V[k]; else el.textContent='?'; }); }
+  function table(id, head, rows){ var el=document.getElementById(id); if(!el)return; var s='<table class="ex"><thead><tr>'+head.map(function(h){return '<th class="num">'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'; rows.forEach(function(r){ s+='<tr>'+r.map(function(c){return '<td class="num">'+esc(c)+'</td>';}).join('')+'</tr>'; }); el.innerHTML=s+'</tbody></table>'; }
+
+  // ============================================================ worked examples
+  // --- metrics on the six-row series
+  var Y=[60,80,120,300,90,70], F=[65,75,110,220,95,75];
+  var E=Y.map(function(y,i){return y-F[i];});
+  var absE=E.map(Math.abs), sqE=E.map(function(e){return e*e;});
+  var MAE=mean(absE), MSE=mean(sqE), RMSE=Math.sqrt(MSE);
+  var ape=absE.map(function(e,i){return e/Math.abs(Y[i]);});
+  var MAPE=100*mean(ape), RMSPE=100*Math.sqrt(mean(E.map(function(e,i){return (e/Y[i])*(e/Y[i]);})));
+  var ybar=mean(Y), fbar=mean(F), nMAPE=100*MAE/ybar;
+  var r=corr(Y,F), alpha=sd(F)/sd(Y), beta=fbar/ybar, kgedist=Math.sqrt((r-1)*(r-1)+(alpha-1)*(alpha-1)+(beta-1)*(beta-1)), KGE=1-kgedist;
+  table('t-errors',['Half-hour','Actual y (A$/MWh)','Forecast ŷ','Error e = y − ŷ'],Y.map(function(y,i){return ['17:'+(i<2?'00':'30').slice(0,2)+'', y, F[i], E[i]];}).map(function(row,i){ var times=['17:00','17:30','18:00','18:30','19:00','19:30']; row[0]=times[i]; return row; }));
+  setV('m.abse',list(absE,0)); setV('m.mae',fmt(MAE,2)); setV('m.sqe',list(sqE,0)); setV('m.mse',fmt(MSE,1)); setV('m.rmse',fmt(RMSE,2)); setV('m.rmseratio',fmt(RMSE/MAE,2));
+  setV('m.ape',list(ape,3)); setV('m.mape',fmt(MAPE,1)); setV('m.rmspe',fmt(RMSPE,1)); setV('m.ybar',fmt(ybar,1)); setV('m.nmape',fmt(nMAPE,1)); setV('m.fbar',fmt(fbar,1));
+  // near-zero variant: replace last row with actual 1, forecast 6
+  var Y0=Y.slice(0,5).concat([1]), F0=F.slice(0,5).concat([6]); var E0=Y0.map(function(y,i){return y-F0[i];});
+  setV('m.mape_zero',fmt(100*mean(E0.map(function(e,i){return Math.abs(e)/Math.abs(Y0[i]);})),0)); setV('m.nmape_zero',fmt(100*mean(E0.map(Math.abs))/mean(Y0),1));
+  setV('m.r',fmt(r,3)); setV('m.r2',fmt(r*r,3)); setV('m.r_half',fmt(corr(Y,F.map(function(v){return v/2;})),3));
+  setV('m.sdy',fmt(sd(Y),1)); setV('m.sdf',fmt(sd(F),1)); setV('m.alpha',fmt(alpha,3)); setV('m.alphapct',fmt(100*alpha,0)); setV('m.beta',fmt(beta,3)); setV('m.kgedist',fmt(kgedist,3)); setV('m.kge',fmt(KGE,3));
+  // RevIN
+  var z=Y.map(function(v){return (v-ybar)/sd(Y);}); setV('rv.z',list(z,2)); setV('rv.back',fmt(0.5*sd(Y)+ybar,1));
+  // --- DM test
+  var A=[10,30,5,120,20,15,8,25], B=[12,25,9,90,30,10,14,20]; var D=A.map(function(a,i){return a-B[i];}); var dm=mean(D), dsd=Math.sqrt(D.map(function(d){return (d-dm)*(d-dm);}).reduce(function(a,b){return a+b;},0)/(D.length-1)), dse=dsd/Math.sqrt(D.length);
+  setV('dm.a',list(A,0)); setV('dm.b',list(B,0)); setV('dm.d',list(D,0)); setV('dm.mean',fmt(dm,2)); setV('dm.sd',fmt(dsd,2)); setV('dm.se',fmt(dse,2)); setV('dm.stat',fmt(dm/dse,2));
+  // --- neuron
+  var s=0.3*1.2+0.8*1.5-0.2; setV('nn.sum',fmt(s,2)); setV('nn.relu',fmt(Math.max(0,s),2)); setV('nn.tanh',fmt(Math.tanh(s),3)); setV('nn.sig',fmt(1/(1+Math.exp(-s)),3)); setV('nn.out',fmt(100*Math.max(0,s),0));
+  // --- pinball
+  setV('pin.low',fmt(0.9*20,0)); setV('pin.high',fmt(0.1*20,0));
+  // --- CNN
+  var cx=[60,62,65,80,120,200,150,90], ck=[-1,0,1], cy=[]; for(var i=1;i<cx.length-1;i++) cy.push(ck[0]*cx[i-1]+ck[1]*cx[i]+ck[2]*cx[i+1]);
+  var crelu=cy.map(function(v){return Math.max(0,v);}); var cpool=[]; for(var j=0;j<crelu.length;j+=2) cpool.push(Math.max(crelu[j],crelu[j+1]!==undefined?crelu[j+1]:-Infinity));
+  setV('cnn.x',list(cx,0)); setV('cnn.y',list(cy,0)); setV('cnn.relu',list(crelu,0)); setV('cnn.pool',list(cpool,0));
+  // --- LSTM
+  var c1=0.9*0.6, c2=0.5*0.8, c=c1+c2, h=0.7*Math.tanh(c); setV('lstm.c1',fmt(c1,2)); setV('lstm.c2',fmt(c2,2)); setV('lstm.c',fmt(c,2)); setV('lstm.tanhc',fmt(Math.tanh(c),3)); setV('lstm.h',fmt(h,3)); setV('lstm.calt',fmt(0.1*0.6+0.4,2));
+  // --- autoencoder
+  var noise=[3,-4,6,-9,2,-3]; setV('ae.noisy',list(Y.map(function(v,i){return v+noise[i];}),0)); setV('ae.clean',list(Y,0));
+  // --- RVFL
+  var rx=[0.5,0.7,0.9,1.2,1.6,2.2,3.0,0.8], ry=[0.6,0.75,1.0,1.4,1.5,1.9,2.4,0.9]; var w1=1.3,b1=-1.6,w2=-0.9,b2=1.2;
+  var H=rx.map(function(x){return [1,x,Math.tanh(w1*x+b1),Math.tanh(w2*x+b2)];}); var beta_=solveLS(H,ry,0.01); var fit=H.map(function(row){return row.reduce(function(s,v,i){return s+v*beta_[i];},0);});
+  var rmae=mean(fit.map(function(f,i){return Math.abs(f-ry[i]);}));
+  table('t-rvfl',['Row','x (price now ÷100)','tanh(w₁x+b₁)','tanh(w₂x+b₂)','target y','fitted ŷ'],rx.map(function(x,i){return [i+1,fmt(x,2),fmt(H[i][2],3),fmt(H[i][3],3),fmt(ry[i],2),fmt(fit[i],2)];}));
+  setV('rvfl.w1',w1); setV('rvfl.b1',b1); setV('rvfl.w2',w2); setV('rvfl.b2',b2); setV('rvfl.beta',list(beta_,2)); setV('rvfl.mae',fmt(rmae,3)); setV('rvfl.mae100',fmt(100*rmae,0));
+  // --- softmax
+  var ss=[2,1,0.1], se=ss.map(Math.exp), sw=softmax(ss); setV('sm.exp',list(se,3)); setV('sm.sum',fmt(se.reduce(function(a,b){return a+b;},0),3)); setV('sm.w',list(sw,3)); setV('sm.w3',list(softmax(ss.map(function(v){return 3*v;})),3));
+  // --- attention
+  var q=[1.0,0.5], K=[[0.9,0.6],[0.7,0.2],[-0.8,0.3]], Vv=[2.6,1.4,0.4]; var sc=K.map(function(k){return (q[0]*k[0]+q[1]*k[1])/Math.sqrt(2);}); var aw=softmax(sc); var ao=aw.reduce(function(s,w,i){return s+w*Vv[i];},0);
+  setV('at.q',list(q,1)); setV('at.k1',list(K[0],1)); setV('at.k2',list(K[1],1)); setV('at.k3',list(K[2],1)); setV('at.v',list(Vv,1)); setV('at.s',list(sc,3)); setV('at.w',list(aw,3)); setV('at.out',fmt(ao,3)); setV('at.out100',fmt(100*ao,0));
+  // --- patches, lora
+  setV('pt.n',(96-24)/6+1); var full=4096*4096, lora=2*4096*8; setV('lora.full',full.toLocaleString()); setV('lora.lora',lora.toLocaleString()); setV('lora.pct',fmt(100*lora/full,2));
+  // --- RL toy
+  var P=[50,300,40], Fc=[50,45,140]; setV('rl.p',list(P,0)); setV('rl.f',list(Fc,0)); setV('rl.buy','interval 1 (A$50)'); setV('rl.sell','interval 2 (A$300)'); setV('rl.pio',fmt(P[1]-P[0],0)); setV('rl.fpred',fmt(Fc[2]-Fc[1],0)); setV('rl.fact',fmt(P[2]-P[1],0));
+  // --- covariate table
+  (function(){ var el=document.getElementById('t-cov'); if(!el)return; var rows=[
+    ['RRP (price)','yes, 48 h','no: this is the target','the target'],
+    ['Demand','yes','yes: AEMO pre-dispatch demand','future known'],
+    ['Net interchange','yes','yes: pre-dispatch flows','future known'],
+    ['Temperature, cloud, humidity, wind','yes (observed)','yes: Open-Meteo forecast','future known'],
+    ['Workday, half-hour / weekday / month sin-cos','yes','yes (calendar is known)','future known'],
+    ['Hours to delivery','n/a','yes','future known'],
+    ['AEMO pre-dispatch RRP, all regions','yes (past runs)','yes: the current run','future known, dominant']];
+    var s='<table><thead><tr><th>Variable</th><th>Available for the past 96 steps (encoder)?</th><th>Available for the next 32 steps (decoder)?</th><th>Kind</th></tr></thead><tbody>'; rows.forEach(function(r){s+='<tr>'+r.map(function(c){return '<td>'+esc(c)+'</td>';}).join('')+'</tr>';}); el.innerHTML=s+'</tbody></table>'; })();
+  // --- Haar wavelet
+  var hx=[60,70,65,75,300,80,70,60]; var a1=[],d1=[]; for(var i3=0;i3<hx.length;i3+=2){a1.push((hx[i3]+hx[i3+1])/2);d1.push((hx[i3]-hx[i3+1])/2);} var a2=[],d2=[]; for(var i4=0;i4<a1.length;i4+=2){a2.push((a1[i4]+a1[i4+1])/2);d2.push((a1[i4]-a1[i4+1])/2);}
+  var ma1=hx.map(function(v,i){var prev=hx[(i-1+hx.length)%hx.length];return (v+prev)/2;}), md1=hx.map(function(v,i){var prev=hx[(i-1+hx.length)%hx.length];return (v-prev)/2;});
+  setV('hw.x',list(hx,0)); setV('hw.a1',list(a1,1)); setV('hw.d1',list(d1,1)); setV('hw.a2',list(a2,2)); setV('hw.d2',list(d2,2)); setV('hw.ma1',list(ma1,1)); setV('hw.md1',list(md1,1));
+  fillV();
+
+  // ============================================================ diagram helpers
+  function flow(id, steps, opt){
+    var el=document.getElementById(id); if(!el) return;
+    opt = opt || {};
+    var W = opt.w || 168, Hh = opt.h || 60, GAP = opt.gap || 42, PGAP = 10, PAD = 12;
+    var cols = steps.map(function(st){ return st.par ? st.par : [st]; });
+    var maxRows = Math.max.apply(null, cols.map(function(c){return c.length;}));
+    var totalH = maxRows*Hh + (maxRows-1)*PGAP + 2*PAD + (opt.extraH||0);
+    var totalW = cols.length*W + (cols.length-1)*GAP + 2*PAD;
+    var s = '<svg viewBox="0 0 '+totalW+' '+totalH+'" width="'+totalW+'" height="'+totalH+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">';
+    s += '<defs><marker id="ah'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>';
+    var centers = [];
+    cols.forEach(function(col, ci){
+      var colH = col.length*Hh + (col.length-1)*PGAP;
+      var y0 = PAD + (maxRows*Hh + (maxRows-1)*PGAP - colH)/2;
+      var x = PAD + ci*(W+GAP);
+      var cs = [];
+      col.forEach(function(n, ri){
+        var y = y0 + ri*(Hh+PGAP);
+        var cls = 'box-'+(n.k||'model');
+        s += '<rect x="'+x+'" y="'+y+'" width="'+W+'" height="'+Hh+'" rx="8" class="'+cls+'" stroke="rgba(0,0,0,.18)"'+(n.dash?' stroke-dasharray="4 3"':'')+(n.grey?' opacity="0.35"':'')+'/>';
+        var lines = n.s || [];
+        var ty = y + 18;
+        s += '<text x="'+(x+W/2)+'" y="'+ty+'" text-anchor="middle" class="ti">'+esc(n.t)+'</text>';
+        lines.forEach(function(l,i){ s += '<text x="'+(x+W/2)+'" y="'+(ty+14*(i+1))+'" text-anchor="middle" class="ts">'+esc(l)+'</text>'; });
+        cs.push({x:x, y:y+Hh/2, r:x+W});
+      });
+      centers.push(cs);
+    });
+    for (var i=0;i<centers.length-1;i++){
+      centers[i].forEach(function(a){ centers[i+1].forEach(function(b){
+        var x1=a.r, y1=a.y, x2=b.x-2, y2=b.y, mx=(x1+x2)/2;
+        s += '<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#6b7280" stroke-width="1.4" marker-end="url(#ah'+id+')"/>';
+      });});
+    }
+    if (opt.extra) s += opt.extra(totalW,totalH,centers);
+    s += '</svg>';
+    el.innerHTML = s;
+  }
+  function svg(id, w, h, body){ var el=document.getElementById(id); if(!el)return; el.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;display:block;margin:6px auto"><defs><marker id="ah-'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>'+body+'</svg>'; }
+  function arr(id){ return 'marker-end="url(#ah-'+id+')"'; }
+  function series(n, f){ var a=[]; for(var i=0;i<n;i++) a.push(f(i)); return a; }
+  function path(pts, x0, y0, dx, sy, stroke, w){ var d=pts.map(function(v,i){return (i?'L':'M')+(x0+i*dx)+' '+(y0-v*sy);}).join(' '); return '<path d="'+d+'" fill="none" stroke="'+stroke+'" stroke-width="'+(w||1.6)+'"/>'; }
+  function txt(x,y,t,cls,anchor,extra){ return '<text x="'+x+'" y="'+y+'" class="'+(cls||'ts')+'" text-anchor="'+(anchor||'start')+'" '+(extra||'')+'>'+esc(t)+'</text>'; }
+  function blk(x,y,w,h,cls,t,s){ return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="8" class="'+cls+'" stroke="rgba(0,0,0,.18)"/>'+txt(x+w/2,y+(s?20:h/2+4),t,'ti','middle')+(s?txt(x+w/2,y+36,s,'ts','middle'):''); }
+
+  // ============================================================ Part 1 diagrams
+  // setup
+  (function(){ var b='', x0=20, y=70, cw=36; var labels=['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
+    for(var i=0;i<8;i++){ var x=x0+i*(cw+6); var past=i<4; b+='<rect x="'+x+'" y="'+y+'" width="'+cw+'" height="30" rx="5" class="'+(past?'box-input':'box-out')+'" stroke="rgba(0,0,0,.15)"'+(past?'':' opacity="0.5"')+'/>'; b+=txt(x+cw/2,y+19,labels[i],'ts','middle'); }
+    b+='<line x1="'+(x0+4*(cw+6)-3)+'" y1="40" x2="'+(x0+4*(cw+6)-3)+'" y2="180" stroke="#6d5bd0" stroke-width="2" stroke-dasharray="5 3"/>'; b+=txt(x0+4*(cw+6)-3,34,'forecast origin: now (16:00)','ts','middle','fill="#5b21b6"');
+    b+=txt(x0+2*(cw+6),60,'lags: past prices (known)','ts','middle'); b+=txt(x0+6*(cw+6),60,'targets: unknown prices','ts','middle');
+    for(var j=4;j<8;j++){ var x2=x0+j*(cw+6); b+='<rect x="'+x2+'" y="115" width="'+cw+'" height="30" rx="5" class="box-input" stroke="rgba(0,0,0,.15)"/>'; b+=txt(x2+cw/2,134,'PD','ts','middle'); }
+    b+=txt(x0+6*(cw+6)-30,165,'known-future covariates (pre-dispatch, weather fc, calendar)','ts','middle');
+    for(var k=0;k<4;k++){ var x3=x0+k*(cw+6); b+='<rect x="'+x3+'" y="115" width="'+cw+'" height="30" rx="5" class="box-input" stroke="rgba(0,0,0,.15)"/>'; b+=txt(x3+cw/2,134,'obs','ts','middle'); }
+    b+=txt(x0+2*(cw+6)+20,165,'past covariates (observed weather, demand)','ts','middle');
+    svg('d-setup',420,185,b); })();
+  // split
+  (function(){ var b='', x0=20, W=560; var tr=0.75, va=0.05;
+    b+='<rect x="'+x0+'" y="20" width="'+(W*tr)+'" height="26" class="box-model"/>'+txt(x0+W*tr/2,37,'train 37,085 (Nov 2022 → ~Dec 2024)','ts','middle');
+    b+='<rect x="'+(x0+W*tr)+'" y="20" width="'+(W*va)+'" height="26" class="box-prep"/>'+txt(x0+W*tr+W*va/2,37,'val','ts','middle');
+    b+='<rect x="'+(x0+W*(tr+va))+'" y="20" width="'+(W*(1-tr-va))+'" height="26" class="box-out"/>'+txt(x0+W*(tr+va)+W*(1-tr-va)/2,37,'test 9,858','ts','middle');
+    b+=txt(x0,66,'walk-forward folds used to choose hyperparameters:','ts');
+    for(var f=0;f<5;f++){ var y=76+f*20; var end=W*tr*(0.45+0.11*f); b+='<rect x="'+x0+'" y="'+y+'" width="'+end+'" height="14" class="box-model" opacity="0.8"/>'; b+='<rect x="'+(x0+end)+'" y="'+y+'" width="'+(W*tr*0.11)+'" height="14" class="box-prep"/>'; b+=txt(x0+end+W*tr*0.11+6,y+11,'fold '+(f+1),'ts'); }
+    svg('d-split',600,185,b); })();
+  // leak
+  (function(){ var n=30, x0=20, y0=80, dx=11; var sig=series(n,function(i){return 0.5+0.35*Math.sin(i/3)+(i===18?0.9:0);}); var b=path(sig,x0,y0,dx,50,'#1f2937',1.6);
+    var t=12; b+='<rect x="'+(x0+(t-2)*dx-4)+'" y="20" width="'+(5*dx)+'" height="80" rx="6" fill="rgba(109,91,208,.15)" stroke="#6d5bd0"/>';
+    b+='<line x1="'+(x0+t*dx)+'" y1="20" x2="'+(x0+t*dx)+'" y2="110" stroke="#b91c1c" stroke-width="1.5" stroke-dasharray="4 3"/>'; b+=txt(x0+t*dx,120,'t (forecast origin)','ts','middle','fill="#991b1b"');
+    b+=txt(x0+t*dx+3*dx,16,'t+1, t+2 used by the filter','ts','middle','fill="#5b21b6"'); b+=txt(x0,140,'smoothed(t) = mean(x[t−2] … x[t+2]) → the input already knows the future','ts');
+    svg('d-leak',400,150,b); })();
+  // KGE 3D-ish
+  (function(){ var b=''; var ox=60, oy=150; b+='<line x1="'+ox+'" y1="'+oy+'" x2="'+(ox+220)+'" y2="'+oy+'" stroke="#9ca3af"/>'+txt(ox+225,oy+4,'r','ts'); b+='<line x1="'+ox+'" y1="'+oy+'" x2="'+ox+'" y2="'+(oy-120)+'" stroke="#9ca3af"/>'+txt(ox-4,oy-125,'α','ts','end'); b+='<line x1="'+ox+'" y1="'+oy+'" x2="'+(ox-40)+'" y2="'+(oy+40)+'" stroke="#9ca3af"/>'+txt(ox-30,oy+38,'β','ts','end');
+    b+='<circle cx="'+(ox+200)+'" cy="'+(oy-100)+'" r="6" fill="#15803d"/>'+txt(ox+200,oy-110,'perfect (1, 1, 1)','ts','middle','fill="#166534"');
+    var px=ox+200*r, py=oy-100*alpha+ (1-beta)*40; b+='<circle cx="'+px+'" cy="'+py+'" r="6" fill="#6d5bd0"/>'+txt(px,py+18,'example ('+fmt(r,2)+', '+fmt(alpha,2)+', '+fmt(beta,2)+')','ts','middle','fill="#5b21b6"');
+    b+='<line x1="'+px+'" y1="'+py+'" x2="'+(ox+200)+'" y2="'+(oy-100)+'" stroke="#6d5bd0" stroke-dasharray="4 3"/>'; b+=txt(ox+120,oy+30,'KGE = 1 − length of the dashed line = '+fmt(KGE,3),'ts','middle');
+    svg('d-kge',330,200,b); })();
+
+  // ============================================================ Part 2 diagrams
+  (function(){ var b=''; // neuron
+    var ins=['x₁ = 1.2','x₂ = 1.5']; ins.forEach(function(t,i){ var y=50+i*40; b+='<circle cx="30" cy="'+y+'" r="8" fill="#93c5fd"/>'+txt(30,y-14,t,'ts','middle'); b+='<line x1="38" y1="'+y+'" x2="110" y2="70" stroke="#6b7280"/>'+txt(72,y+(i?14:-6),'w = '+(i?0.8:0.3),'ts','middle'); });
+    b+='<circle cx="120" cy="70" r="14" fill="#c4b5fd"/>'+txt(120,74,'Σ','ti','middle'); b+=txt(120,100,'+ b = −0.2','ts','middle'); b+='<path d="M134 70 L170 70" stroke="#6b7280" '+arr('d-neuron')+'/>'; b+='<rect x="172" y="56" width="52" height="28" rx="6" class="box-model"/>'+txt(198,74,'ReLU','ts','middle'); b+='<path d="M224 70 L255 70" stroke="#6b7280" '+arr('d-neuron')+'/>'+txt(262,74,'out '+fmt(Math.max(0,s),2),'ts');
+    // small MLP
+    var L=[3,4,1], xs=[360,430,500]; L.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=70+(i-(n-1)/2)*24; if(li<L.length-1) for(var j=0;j<L[li+1];j++){ var y2=70+(j-(L[li+1]-1)/2)*24; b+='<line x1="'+xs[li]+'" y1="'+y+'" x2="'+xs[li+1]+'" y2="'+y2+'" stroke="#e5e7eb"/>'; } } });
+    L.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=70+(i-(n-1)/2)*24; b+='<circle cx="'+xs[li]+'" cy="'+y+'" r="7" fill="'+(li===0?'#93c5fd':li===2?'#86efac':'#c4b5fd')+'"/>'; } });
+    b+=txt(360,130,'inputs','ts','middle'); b+=txt(430,130,'hidden layer','ts','middle'); b+=txt(500,130,'output','ts','middle');
+    svg('d-neuron',540,140,b); })();
+  (function(){ var n=60, x0=30, y0=130, dx=5; var loss=series(n,function(i){var u=(i-38)/14; return 0.15+u*u*0.3;}); var b=path(loss,x0,y0,dx,50,'#1f2937',1.8);
+    var pts=[8,16,23,29,33,36]; pts.forEach(function(p,i){ b+='<circle cx="'+(x0+p*dx)+'" cy="'+(y0-loss[p]*50)+'" r="4" fill="#6d5bd0"/>'; if(i<pts.length-1) b+='<path d="M'+(x0+p*dx)+' '+(y0-loss[p]*50)+' L'+(x0+pts[i+1]*dx)+' '+(y0-loss[pts[i+1]]*50)+'" stroke="#6d5bd0" stroke-width="1.4" '+arr('d-gd')+'/>'; });
+    b+=txt(x0,150,'weight value →','ts'); b+=txt(x0,20,'loss','ts'); b+=txt(x0+8*dx,y0-loss[8]*50-10,'start','ts','middle'); b+=txt(x0+38*dx,y0-loss[38]*50+16,'minimum','ts','middle');
+    svg('d-gd',340,160,b); })();
+  (function(){ var n=81, x0=40, y0=140, dx=3.5, sy=40; var xs=series(n,function(i){return (i-40)/13;});
+    var mse=xs.map(function(u){return u*u;}), mae=xs.map(function(u){return Math.abs(u);}), hub=xs.map(function(u){var d=0.8; return Math.abs(u)<=d?0.5*u*u:d*(Math.abs(u)-0.5*d);});
+    var b=path(mse.map(function(v){return Math.min(v,3.2);}),x0,y0,dx,sy,'#b91c1c')+path(mae,x0,y0,dx,sy,'#2563eb')+path(hub,x0,y0,dx,sy,'#15803d',2);
+    b+='<line x1="'+(x0+40*dx)+'" y1="'+y0+'" x2="'+(x0+40*dx)+'" y2="10" stroke="#e5e7eb"/>'; b+=txt(x0+40*dx,155,'miss (scaled units) →','ts','middle');
+    b+=txt(x0+70*dx,y0-3.2*sy+4,'MSE (squared)','ts','start','fill="#b91c1c"'); b+=txt(x0+70*dx,y0-mae[70]*sy-6,'MAE','ts','start','fill="#2563eb"'); b+=txt(x0+70*dx,y0-hub[70]*sy+14,'Huber δ=0.8','ts','start','fill="#15803d"');
+    svg('d-loss',360,165,b); })();
+  (function(){ var b='';
+    for(var i=0;i<6;i++){ var off=(i===1||i===4); b+='<circle cx="'+(30+i*22)+'" cy="50" r="8" fill="'+(off?'#e5e7eb':'#c4b5fd')+'" stroke="'+(off?'#9ca3af':'none')+'"/>'; if(off) b+='<line x1="'+(30+i*22-5)+'" y1="45" x2="'+(30+i*22+5)+'" y2="55" stroke="#9ca3af"/>'; }
+    b+=txt(85,80,'dropout: random units off','ts','middle');
+    var vals=[3,9,1,5]; var m=mean(vals), sdv=sd(vals); vals.forEach(function(v,i){ b+='<rect x="'+(200+i*22)+'" y="'+(70-v*5)+'" width="16" height="'+(v*5)+'" fill="#93c5fd"/>'; b+='<rect x="'+(300+i*22)+'" y="'+(50-((v-m)/sdv)*10)+'" width="16" height="'+(Math.abs((v-m)/sdv)*10)+'" fill="#c4b5fd" transform="'+(((v-m)/sdv)<0?'translate(0,'+(((v-m)/sdv)*10)+')':'')+'"/>'; });
+    b+='<path d="M275 50 L295 50" stroke="#6b7280" '+arr('d-reg')+'/>'; b+=txt(290,80,'LayerNorm: (x − mean) / sd','ts','middle');
+    b+=blk(430,36,90,30,'box-model','block'); b+='<path d="M400 51 L430 51" stroke="#6b7280"/><path d="M520 51 L560 51" stroke="#6b7280" '+arr('d-reg')+'/>'; b+='<path d="M410 51 C410 10 545 10 545 51" fill="none" stroke="#6d5bd0" stroke-width="1.6"/>'; b+='<circle cx="545" cy="51" r="6" fill="#fff" stroke="#6d5bd0"/>'+txt(545,55,'+','ts','middle'); b+=txt(480,80,'residual: out = x + block(x)','ts','middle');
+    svg('d-reg',580,90,b); })();
+  (function(){ var b=''; var x0=20,y0=110,bw=16,gap=6; cx.forEach(function(v,i){ b+='<rect x="'+(x0+i*(bw+gap))+'" y="'+(y0-v*0.4)+'" width="'+bw+'" height="'+(v*0.4)+'" fill="#93c5fd"/>'; b+=txt(x0+i*(bw+gap)+bw/2,y0+12,v,'ts','middle'); });
+    b+='<rect x="'+(x0+0*(bw+gap)-3)+'" y="20" width="'+(3*(bw+gap)-gap+6)+'" height="96" rx="4" fill="none" stroke="#6d5bd0" stroke-width="2"/>'; b+=txt(x0+1*(bw+gap)+bw/2,14,'(−1, 0, +1)','ts','middle','fill="#5b21b6"');
+    b+='<rect x="'+(x0+3*(bw+gap)-3)+'" y="20" width="'+(3*(bw+gap)-gap+6)+'" height="96" rx="4" fill="none" stroke="#6d5bd0" stroke-width="2" stroke-dasharray="4 3"/>';
+    b+='<path d="M'+(x0+1*(bw+gap)+bw/2)+' 122 L'+(x0+1*(bw+gap)+bw/2)+' 150" stroke="#6b7280" '+arr('d-cnn')+'/>';
+    cy.forEach(function(v,i){ var x=x0+(i+1)*(bw+gap); b+='<rect x="'+x+'" y="'+(v>=0?190-v*0.5:190)+'" width="'+bw+'" height="'+(Math.abs(v)*0.5)+'" fill="'+(v>=0?'#c4b5fd':'#fecaca')+'"/>'; b+=txt(x+bw/2,262,v,'ts','middle'); });
+    b+=txt(x0,140,'output = −x[i−1] + 0·x[i] + x[i+1]','ts'); b+=txt(x0,280,'ReLU keeps the purple bars, zeroes the red one','ts');
+    svg('d-cnn',260,290,b); })();
+  (function(){ var b=''; b+='<rect x="60" y="30" width="260" height="120" rx="12" fill="#f5f3ff" stroke="#c4b5fd"/>';
+    b+='<line x1="10" y1="55" x2="60" y2="55" stroke="#d97706" stroke-width="3"/><line x1="320" y1="55" x2="370" y2="55" stroke="#d97706" stroke-width="3" '+arr('d-lstm')+'/>'; b+=txt(10,48,'c(t−1)','ts'); b+=txt(340,48,'c(t)','ts');
+    b+='<line x1="60" y1="55" x2="320" y2="55" stroke="#d97706" stroke-width="3"/>';
+    b+='<circle cx="120" cy="55" r="11" fill="#fff" stroke="#d97706"/>'+txt(120,59,'×','ti','middle'); b+='<circle cx="220" cy="55" r="11" fill="#fff" stroke="#d97706"/>'+txt(220,59,'+','ti','middle');
+    b+=blk(95,90,50,26,'box-model','f'); b+=blk(160,90,50,26,'box-model','i'); b+=blk(225,90,50,26,'box-model','c̃'); b+=blk(290,90,26,26,'box-model','o');
+    b+='<line x1="120" y1="90" x2="120" y2="66" stroke="#6b7280" '+arr('d-lstm')+'/>'; b+='<line x1="185" y1="90" x2="185" y2="75" stroke="#6b7280"/><line x1="250" y1="90" x2="250" y2="75" stroke="#6b7280"/><circle cx="218" cy="75" r="7" fill="#fff" stroke="#6b7280"/>'+txt(218,79,'×','ts','middle')+'<line x1="185" y1="75" x2="211" y2="75" stroke="#6b7280"/><line x1="250" y1="75" x2="225" y2="75" stroke="#6b7280"/><line x1="218" y1="68" x2="220" y2="66" stroke="#6b7280"/>';
+    b+='<line x1="10" y1="130" x2="60" y2="130" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 3"/>'+txt(10,124,'h(t−1), x(t)','ts'); b+='<line x1="60" y1="130" x2="300" y2="130" stroke="#2563eb" stroke-dasharray="5 3"/>';
+    b+='<line x1="303" y1="116" x2="303" y2="66" stroke="#6b7280"/><line x1="303" y1="66" x2="340" y2="66" stroke="#6b7280"/><line x1="340" y1="66" x2="340" y2="130" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 3" '+arr('d-lstm')+'/>'+txt(348,134,'h(t) = o · tanh(c)','ts');
+    b+=txt(190,168,'gates f, i, o are sigmoids of (h(t−1), x(t)); c̃ is a tanh of the same','ts','middle');
+    svg('d-lstm',450,178,b); })();
+  (function(){ var b=''; var layers=[6,3,6], xs=[40,170,300]; layers.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=90+(i-(n-1)/2)*20; if(li<2) for(var j=0;j<layers[li+1];j++){ var y2=90+(j-(layers[li+1]-1)/2)*20; b+='<line x1="'+xs[li]+'" y1="'+y+'" x2="'+xs[li+1]+'" y2="'+y2+'" stroke="#e5e7eb"/>'; } } });
+    layers.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=90+(i-(n-1)/2)*20; var off=(li===1&&i!==1); b+='<circle cx="'+xs[li]+'" cy="'+y+'" r="6" fill="'+(li===1?(off?'#e5e7eb':'#6d5bd0'):'#c4b5fd')+'"/>'; } });
+    b+=txt(40,26,'noisy input (6)','ts','middle'); b+=txt(170,26,'bottleneck (3), sparse','ts','middle','fill="#5b21b6"'); b+=txt(300,26,'clean target (6)','ts','middle');
+    svg('d-ae',340,150,b); })();
+  (function(){ var b=''; b+=blk(120,10,160,30,'box-model','pre-dispatch price > 150?'); b+='<line x1="160" y1="40" x2="90" y2="70" stroke="#6b7280" '+arr('d-tree')+'/><line x1="240" y1="40" x2="310" y2="70" stroke="#6b7280" '+arr('d-tree')+'/>'; b+=txt(110,58,'no','ts','end'); b+=txt(290,58,'yes','ts');
+    b+=blk(20,72,150,30,'box-model','demand > 9 GW?'); b+=blk(240,72,150,30,'box-out','predict A$ 310'); b+='<line x1="60" y1="102" x2="40" y2="130" stroke="#6b7280" '+arr('d-tree')+'/><line x1="130" y1="102" x2="150" y2="130" stroke="#6b7280" '+arr('d-tree')+'/>'; b+=blk(5,132,80,26,'box-out','A$ 70'); b+=blk(110,132,80,26,'box-out','A$ 140');
+    svg('d-tree',400,168,b); })();
+  (function(){ var b=''; var xin=80,xh=210,xo=340; var inN=3,hN=5;
+    for(var i=0;i<inN;i++){ var y=90+(i-1)*26; for(var j=0;j<hN;j++){ var y2=90+(j-2)*22; b+='<line x1="'+xin+'" y1="'+y+'" x2="'+xh+'" y2="'+y2+'" stroke="#d1d5db" stroke-dasharray="3 2"/>'; } b+='<path d="M'+xin+' '+y+' Q'+xh+' '+(y-70)+' '+xo+' 90" fill="none" stroke="#2563eb" stroke-width="1.2"/>'; }
+    for(var j2=0;j2<hN;j2++){ var y3=90+(j2-2)*22; b+='<line x1="'+xh+'" y1="'+y3+'" x2="'+xo+'" y2="90" stroke="#6d5bd0" stroke-width="1.6"/>'; }
+    for(var i2=0;i2<inN;i2++){ b+='<circle cx="'+xin+'" cy="'+(90+(i2-1)*26)+'" r="7" fill="#93c5fd"/>'; }
+    for(var j3=0;j3<hN;j3++){ b+='<circle cx="'+xh+'" cy="'+(90+(j3-2)*22)+'" r="7" fill="#e5e7eb" stroke="#9ca3af" stroke-dasharray="2 2"/>'; }
+    b+='<circle cx="'+xo+'" cy="90" r="9" fill="#86efac"/>'; b+=txt(xin,165,'inputs (CNN features)','ts','middle'); b+=txt(xh,165,'random hidden units, never trained','ts','middle'); b+=txt(xo,165,'price','ts','middle'); b+=txt(220,18,'blue: direct link · grey dashed: random fixed weights · purple: learned by least squares','ts','middle');
+    svg('d-rvfl',440,176,b); })();
+  (function(){ var n=100; var t=series(n,function(i){return i;}); var mn=t.map(function(i){return 0.5+0.35*Math.sin(i/14)+0.1*Math.sin(i/5);}); var pts=[8,25,41,60,78,95]; var b=''; var x0=20,y0=150,dx=3.4,sy=100;
+    var up=mn.map(function(v,i){var d=Math.min.apply(null,pts.map(function(p){return Math.abs(p-i);})); return v+0.03+0.012*d;}); var lo=mn.map(function(v,i){var d=Math.min.apply(null,pts.map(function(p){return Math.abs(p-i);})); return v-0.03-0.012*d;});
+    var d='M'+up.map(function(v,i){return (x0+i*dx)+' '+(y0-v*sy);}).join(' L')+' L'+lo.slice().reverse().map(function(v,i){return (x0+(n-1-i)*dx)+' '+(y0-v*sy);}).join(' L')+' Z'; b+='<path d="'+d+'" fill="#ede9fe"/>'+path(mn,x0,y0,dx,sy,'#6d5bd0',1.8);
+    pts.forEach(function(p){ b+='<circle cx="'+(x0+p*dx)+'" cy="'+(y0-mn[p]*sy)+'" r="4" fill="#1f2937"/>'; }); var nx=70; b+='<path d="M'+(x0+nx*dx)+' 38 L'+(x0+nx*dx)+' '+(y0-up[nx]*sy-6)+'" stroke="#d97706" stroke-width="2" '+arr('d-bo')+'/>'; b+=txt(x0+nx*dx-30,32,'next trial: high mean + wide band','ts','middle','fill="#92400e"'); b+=txt(x0,170,'hyperparameter value (e.g. number of lags) →   vertical: validation score','ts');
+    svg('d-bo',400,180,b); })();
+  (function(){ var n=90; var t=series(n,function(i){return i;}); var trend=t.map(function(i){return 0.3+0.004*i;}), daily=t.map(function(i){return 0.5*Math.sin(i/4.2);}), fast=t.map(function(i){return 0.18*Math.sin(i*1.7)+0.12*Math.sin(i*2.9);}); var sig=t.map(function(i){return trend[i]+daily[i]+fast[i];}); var b='', dx=3.6;
+    b+=txt(14,14,'observed price','ts')+path(sig,14,60,dx,28,'#1f2937',1.8); b+='<path d="M175 76 L175 92" stroke="#6b7280" '+arr('d-emd')+'/>'+txt(185,88,'= sum of','ts');
+    b+=txt(14,108,'IMF1 fast (bid noise)','ts','start','fill="#b91c1c"')+path(fast,14,130,dx,28,'#b91c1c'); b+=txt(14,158,'IMF2 daily cycle','ts','start','fill="#2563eb"')+path(daily,14,190,dx,28,'#2563eb'); b+=txt(14,222,'residual trend','ts','start','fill="#15803d"')+path(trend,14,250,dx,28,'#15803d');
+    svg('d-emd',350,262,b); })();
+  (function(){ var b=''; var x0=20, dx=34; function bars(y,vals,col,lab,sc){ var s=txt(x0,y-30,lab,'ts','start','fill="'+col+'"'); vals.forEach(function(v,i){ var w=vals.length===8?26:vals.length===4?58:122; var xx=x0+i*(vals.length===8?dx:vals.length===4?dx*2:dx*4); var hgt=Math.abs(v)*sc; s+='<rect x="'+xx+'" y="'+(v>=0?y-hgt:y)+'" width="'+w+'" height="'+hgt+'" fill="'+col+'" opacity="0.7"/>'; s+=txt(xx+w/2,y+12,fmt(v,v%1?1:0),'ts','middle'); }); return s+'<line x1="'+x0+'" y1="'+y+'" x2="'+(x0+8*dx)+'" y2="'+y+'" stroke="#9ca3af"/>'; }
+    b+=bars(70,hx,'#1f2937','x: eight half-hourly prices',0.13); b+=bars(150,a1,'#15803d','A1 (DWT): pair averages, length 4',0.13); b+=bars(230,d1,'#b91c1c','D1 (DWT): half-differences, the spike lives here',0.25); b+=bars(320,ma1,'#15803d','A1 (MoDWT): moving average, full length',0.13); b+=bars(400,md1,'#b91c1c','D1 (MoDWT): moving half-difference, full length',0.25);
+    svg('d-wavelet',320,420,b); })();
+  flow('d-hybrid',[{t:'raw series',s:['price history'],k:'input'},{t:'decompose',s:['EMD / wavelet / SSA'],k:'prep'},{par:[{t:'component 1',s:['own forecaster'],k:'model'},{t:'component 2',s:['own forecaster'],k:'model'},{t:'component k',s:['own forecaster'],k:'model'}]},{t:'sum',s:[],k:'prep'},{t:'forecast',s:[],k:'out'}],{w:130,h:50,gap:30});
+
+  // ============================================================ Part 3 diagrams
+  (function(){ var b=''; var labels=['17:30 yesterday','last half-hour','3 am']; b+=blk(20,20,120,34,'box-model','query: 18:00 step'); for(var i=0;i<3;i++){ var y=90+i*46; b+=blk(20,y,120,34,'box-input',labels[i],'key '+list(K[i],1)); b+='<path d="M80 54 L80 '+y+'" stroke="#e5e7eb"/>'; var w=aw[i]; b+='<rect x="160" y="'+(y+6)+'" width="'+(w*180)+'" height="22" fill="#6d5bd0" opacity="0.75"/>'; b+=txt(165+w*180,y+21,'weight '+fmt(w,3)+' × value '+fmt(Vv[i],1),'ts'); }
+    b+='<path d="M230 232 L230 252" stroke="#6b7280" '+arr('d-attn')+'/>'; b+=txt(230,268,'output = Σ weight × value = '+fmt(ao,3),'ti','middle');
+    svg('d-attn',420,280,b); })();
+  (function(){ var rows=['+1 h','+2 h','+3 h','+4 h']; var cols=['-6 h','-5 h','-4 h','-3 h','-2 h','-1 h','PD +1','PD +2','PD +3','PD +4']; var Wm=[[.05,.05,.05,.08,.15,.25,.3,.03,.02,.02],[.04,.04,.05,.06,.1,.15,.08,.4,.05,.03],[.06,.03,.04,.05,.07,.1,.04,.08,.45,.08],[.1,.03,.03,.04,.05,.06,.03,.05,.09,.52]]; var b='', x0=120,y0=30,cw=26,ch=26;
+    cols.forEach(function(c,j){ b+=txt(x0+j*cw+cw/2,y0-8,c,'ts','middle'); }); rows.forEach(function(rr,i){ b+=txt(x0-6,y0+i*ch+ch/2+4,rr,'ts','end'); cols.forEach(function(c,j){ b+='<rect x="'+(x0+j*cw)+'" y="'+(y0+i*ch)+'" width="'+cw+'" height="'+ch+'" fill="rgba(109,91,208,'+(0.1+Wm[i][j]*1.6)+')" stroke="#fff"/>'; }); });
+    b+=txt(x0+cols.length*cw/2,y0+rows.length*ch+20,'each output row is a weighted average of the inputs; the weights in a row sum to 1','ts','middle'); b+=txt(x0+cols.length*cw/2,y0+rows.length*ch+36,'each future hour attends mostly to its own pre-dispatch (PD) row and to the last 2 h','ts','middle');
+    svg('d-attnmap',480,y0+rows.length*ch+46,b); })();
+  (function(){ var n=48, x0=30, dx=6.5; var b=''; [1,4,16].forEach(function(per,k){ var y0=40+k*40; var pts=series(n,function(i){return Math.sin(i/per);}); b+=path(pts,x0,y0,dx,14,['#b91c1c','#2563eb','#15803d'][k]); b+=txt(x0+n*dx+6,y0+4,'channel '+k+' (period ~'+(Math.round(2*Math.PI*per))+' steps)','ts'); });
+    var y1=180; b+=path(series(n,function(i){return Math.sin(2*Math.PI*i/48);}),x0,y1,dx,16,'#6d5bd0',1.8)+path(series(n,function(i){return Math.cos(2*Math.PI*i/48);}),x0,y1,dx,16,'#d97706',1.8); b+=txt(x0+n*dx+6,y1+4,'half-hour-of-day sin (purple), cos (orange)','ts'); b+=txt(x0,215,'positions 0 … 47 (one day of half-hours) →','ts');
+    svg('d-pos',560,225,b); })();
+  (function(){ var b=''; var x=40; b+='<line x1="'+x+'" y1="230" x2="'+x+'" y2="15" stroke="#6b7280" '+arr('d-tlayer')+'/>';
+    b+=blk(x+30,190,150,28,'box-prep','LayerNorm'); b+=blk(x+30,150,150,28,'box-model','multi-head attention'); b+=blk(x+30,100,150,28,'box-prep','LayerNorm'); b+=blk(x+30,60,150,28,'box-model','feed-forward (d→ff→d)');
+    b+='<circle cx="'+x+'" cy="135" r="7" fill="#fff" stroke="#6d5bd0"/>'+txt(x,139,'+','ts','middle'); b+='<circle cx="'+x+'" cy="45" r="7" fill="#fff" stroke="#6d5bd0"/>'+txt(x,49,'+','ts','middle');
+    b+='<path d="M'+x+' 204 L'+(x+30)+' 204" stroke="#6b7280"/><path d="M'+(x+180)+' 204 L'+(x+200)+' 204 L'+(x+200)+' 164 L'+(x+180)+' 164" fill="none" stroke="#6b7280"/><path d="M'+(x+30)+' 164 L'+(x+7)+' 140" stroke="#6b7280" '+arr('d-tlayer')+'/>';
+    b+='<path d="M'+x+' 114 L'+(x+30)+' 114" stroke="#6b7280"/><path d="M'+(x+180)+' 114 L'+(x+200)+' 114 L'+(x+200)+' 74 L'+(x+180)+' 74" fill="none" stroke="#6b7280"/><path d="M'+(x+30)+' 74 L'+(x+7)+' 50" stroke="#6b7280" '+arr('d-tlayer')+'/>';
+    b+=txt(x+260,204,'residual wire: the input skips the block and is added back','ts'); b+=txt(x+260,164,'d_model 128, 4 heads of 32','ts'); b+=txt(x+260,74,'ff_dim 512, most of the parameters','ts'); b+=txt(x+260,30,'× 3 layers (small model)','ts'); b+=txt(x,245,'input row (128 numbers) ↑ output row (128 numbers)','ts');
+    svg('d-tlayer',620,255,b); })();
+  (function(){ var b=''; var shapes=[{n:'encoder-decoder',enc:1,dec:1},{n:'encoder-only',enc:1,dec:0},{n:'decoder-only',enc:0,dec:1}]; shapes.forEach(function(sh,i){ var x0=14+i*190;
+    b+='<rect x="'+x0+'" y="8" width="176" height="150" rx="10" fill="#fff" stroke="#e5e7eb"/>'+txt(x0+88,26,sh.n,'ti','middle');
+    b+='<rect x="'+(x0+10)+'" y="110" width="74" height="30" rx="6" class="box-input" opacity="'+(sh.enc?1:0.25)+'"/>'+txt(x0+47,129,'past 48 h','ts','middle'); b+='<rect x="'+(x0+92)+'" y="110" width="74" height="30" rx="6" class="box-input" opacity="'+(sh.dec?1:0.25)+'"/>'+txt(x0+129,129,'future covs','ts','middle');
+    b+='<rect x="'+(x0+10)+'" y="66" width="74" height="30" rx="6" class="box-model" opacity="'+(sh.enc?1:0.25)+'"/>'+txt(x0+47,85,'encoder','ts','middle'); b+='<rect x="'+(x0+92)+'" y="66" width="74" height="30" rx="6" class="box-model" opacity="'+(sh.dec?1:0.25)+'"/>'+txt(x0+129,85,sh.dec?'decoder':'—','ts','middle');
+    if(sh.enc&&sh.dec) b+='<path d="M'+(x0+84)+' 81 L'+(x0+92)+' 81" stroke="#6d5bd0" stroke-width="2"/>'+txt(x0+88,60,'cross-attn','ts','middle','fill="#5b21b6"');
+    b+='<rect x="'+(x0+10)+'" y="34" width="156" height="22" rx="6" class="box-out"/>'+txt(x0+88,49,sh.enc&&!sh.dec?'pool/flatten → 32 prices':'32 prices','ts','middle'); });
+    svg('d-encdec',590,168,b); })();
+  flow('d-tft',[{par:[{t:'past inputs',s:['price, demand, weather obs'],k:'input'},{t:'known future',s:['pre-dispatch, weather fc'],k:'input'},{t:'static',s:['region id'],k:'input'}]},{t:'variable selection',s:['softmax weight per input'],k:'model'},{t:'LSTM enc-dec',s:['local order'],k:'model'},{t:'gated attention',s:['one interpretable layer'],k:'model'},{t:'quantiles',s:['p10 / p50 / p90'],k:'out'}],{w:150,h:50,gap:28});
+  (function(){ var n=48; var sig=series(n,function(i){return 0.5+0.4*Math.sin(i/5)+0.1*Math.sin(i*1.3);}); var b='', x0=14,y0=60,dx=7; b+=path(sig,x0,y0,dx,40,'#1f2937',1.6);
+    for(var p=0;p<5;p++){ var px=x0+p*6*dx-2; b+='<rect x="'+px+'" y="'+(14+(p%2)*4)+'" width="'+(12*dx+4)+'" height="60" rx="4" fill="rgba(109,91,208,'+(p%2?0.10:0.18)+')" stroke="#6d5bd0"/>'; b+=txt(px+6*dx,92,'patch '+(p+1),'ts','middle','fill="#5b21b6"'); }
+    b+=txt(x0,112,'patch length 12, stride 6 here (Sinclair: 24 and 6 over 96 steps → 13 patches); each patch → one token','ts');
+    svg('d-patch',560,120,b); })();
+  (function(){ var b=''; var n=8, cw=16; for(var i=0;i<n;i++)for(var j=0;j<n;j++){ b+='<rect x="'+(20+j*cw)+'" y="'+(20+i*cw)+'" width="'+cw+'" height="'+cw+'" fill="rgba(109,91,208,0.5)" stroke="#fff"/>'; } b+=txt(20+n*cw/2,20+n*cw+16,'full: L² = 64 cells','ts','middle');
+    var active=[1,4,6]; for(var i2=0;i2<n;i2++)for(var j2=0;j2<n;j2++){ var act=active.indexOf(i2)>=0; b+='<rect x="'+(200+j2*cw)+'" y="'+(20+i2*cw)+'" width="'+cw+'" height="'+cw+'" fill="'+(act?'rgba(109,91,208,0.8)':'#f3f4f6')+'" stroke="#fff"/>'; } b+=txt(200+n*cw/2,20+n*cw+16,'ProbSparse: 3 active query rows, rest = mean of values','ts','middle');
+    b+=txt(20,12,'queries ↓  keys →','ts');
+    svg('d-informer',400,176,b); })();
+  flow('d-timesfm',[{t:'billions of time points',s:['retail, traffic, weather,','finance, energy ...'],k:'input'},{t:'pre-trained model',s:['decoder-only transformer,','patches in, patches out'],k:'model'},{t:'your history',s:['NSW price only, no covariates'],k:'input'},{t:'zero-shot forecast',s:['no training on NEM'],k:'out'}],{w:150,h:56,gap:24});
+  (function(){ var b=''; b+='<rect x="14" y="30" width="200" height="90" rx="10" fill="#e5e7eb" stroke="#9ca3af"/>'+txt(114,60,'frozen weights W','ti','middle')+txt(114,78,'4096 × 4096, stored in 4-bit','ts','middle')+txt(114,94,'never updated','ts','middle');
+    b+='<rect x="250" y="35" width="54" height="80" rx="8" class="box-model" stroke="#6d5bd0"/>'+txt(277,80,'A','ti','middle')+txt(277,96,'4096×8','ts','middle'); b+='<rect x="314" y="35" width="80" height="26" rx="8" class="box-model" stroke="#6d5bd0"/>'+txt(354,52,'B  8×4096','ts','middle');
+    b+=txt(232,80,'+','ti','middle'); b+=txt(210,140,'output = x·W + x·(A·B): only A and B train, '+fmt(100*lora/full,2)+' % of the parameters','ts','middle');
+    svg('d-lora',420,150,b); })();
+
+  // ============================================================ Part 4 diagrams
+  (function(){ var b=''; for(var i=0;i<4;i++){ var x=30+i*110; b+=blk(x,60,80,34,'box-model','state '+(i+1),'≈ demand'); if(i<3) b+='<path d="M'+(x+80)+' 77 L'+(x+110)+' 77" stroke="#6b7280" '+arr('d-ssm')+'/>'+txt(x+95,70,'GRU','ts','middle'); b+='<path d="M'+(x+40)+' 60 L'+(x+40)+' 34" stroke="#15803d" '+arr('d-ssm')+'/>'+txt(x+40,26,'price '+(i+1)+' = G(state)','ts','middle'); b+='<path d="M'+(x+40)+' 130 L'+(x+40)+' 94" stroke="#2563eb" '+arr('d-ssm')+'/>'+txt(x+40,144,'inputs '+(i+1),'ts','middle'); b+='<path d="M'+(x+60)+' 94 L'+(x+60)+' 112" stroke="#d97706" stroke-dasharray="3 2"/>'+txt(x+62,122,'← trained to match demand','ts','start','fill="#92400e"'); }
+    svg('d-ssm',600,155,b); })();
+  (function(){ var b=''; b+=blk(30,20,150,52,'box-model','agent','transformer → actor / critic'); b+=blk(250,20,150,52,'box-bench','NEM simulator','settles at actual prices');
+    b+='<path d="M180 34 L250 34" stroke="#6b7280" '+arr('d-rl')+'/>'+txt(215,28,'action: bids','ts','middle'); b+='<path d="M250 60 L180 60" stroke="#15803d" stroke-width="1.6" '+arr('d-rl')+'/>'+txt(215,76,'reward: revenue; next state','ts','middle','fill="#166534"');
+    b+=txt(215,100,'critic learns Q(s,a) from rewards; actor moves toward actions the critic rates highly;','ts','middle'); b+=txt(215,114,'the entropy bonus keeps the actor exploring','ts','middle');
+    svg('d-rl',430,125,b); })();
+  (function(){ var b=''; var x0=40,y0=150; b+='<line x1="'+x0+'" y1="'+y0+'" x2="360" y2="'+y0+'" stroke="#9ca3af"/><line x1="'+x0+'" y1="'+y0+'" x2="'+x0+'" y2="20" stroke="#9ca3af"/>'; b+=txt(200,168,'forecast demand (GW) →','ts','middle'); b+=txt(x0+4,16,'SHAP value of demand ↑','ts','start');
+    for(var i=0;i<70;i++){ var d=6+i*0.06+Math.sin(i*7)*0.3; var hot=(i*13)%5<2; var y=y0-((d-6)*28+(hot?12:0)+Math.sin(i*3)*6); b+='<circle cx="'+(x0+i*4.4)+'" cy="'+y+'" r="3" fill="'+(hot?'#b91c1c':'#2563eb')+'" opacity="0.7"/>'; }
+    b+=txt(300,40,'red: hot day','ts','start','fill="#b91c1c"'); b+=txt(300,56,'blue: mild day','ts','start','fill="#2563eb"');
+    svg('d-shap',400,180,b); })();
+
+  // ============================================================ Part 5 paper diagrams
+  flow('d-tan', [
+    {t:'NSW price history', s:['+ related factors','(AEMO)'], k:'input'},
+    {t:'Correlation screen', s:['keep factors that','correlate with price'], k:'prep'},
+    {t:'ICEEMDAN', s:['split every series into','IMF1 ... IMFn + trend'], k:'prep'},
+    {par:[{t:'IMF1 (fastest)', s:['CNN → SSDAE → price part'], k:'model'},{t:'IMF2', s:['CNN → SSDAE → price part'], k:'model'},{t:'... IMFn + trend', s:['CNN → SSDAE → price part'], k:'model'}]},
+    {t:'Sum the parts', s:['component forecasts','added back together'], k:'prep'},
+    {t:'Next-day price', s:['48 half-hours'], k:'out'}
+  ]);
+  flow('d-ghimire23', [
+    {par:[{t:'6 lagged demand values', s:['daily, lags from','mutual-information test'], k:'input'},{t:'10 SILO climate variables', s:['rain, radiation, humidity,','evaporation, Tmax, Tmin ...'], k:'input'}]},
+    {t:'Time2Vec embedding', s:['learned sine features','of time replace','positional encoding'], k:'prep'},
+    {t:'3 × attention block', s:['12-head self-attention','+ dropout + LayerNorm','+ Conv1D (ReLU)'], k:'model'},
+    {t:'Global average pool', s:['collapse the sequence','to one vector'], k:'model'},
+    {t:'Dense (1 unit, linear)', s:['+ KDE 95 % interval'], k:'model'},
+    {t:'Tomorrow\'s demand', s:['MW, per substation'], k:'out'}
+  ]);
+  flow('d-li', [
+    {t:'7 market prices', s:['spot + 6 contingency FCAS','last 32 × 5-min intervals'], k:'input'},
+    {t:'Embed to 64-d', s:['+ positional encoding'], k:'model'},
+    {t:'Transformer × 2 layers', s:['8-head self-attention','over the 32 intervals'], k:'model'},
+    {t:'Global average pool', s:['1 × 64 feature vector'], k:'model'},
+    {t:'Soft Actor-Critic', s:['actor: 2 × 512 units','critic: 2 × 512 units'], k:'model'},
+    {par:[{t:'Bids', s:['charge / discharge MW','spot + 6 FCAS quantities'], k:'out'},{t:'NEM simulator', s:['dispatches, pays revenue,','revenue trains everything'], k:'bench'}]}
+  ]);
+  flow('d-ghimire24', [
+    {t:'NSW half-hourly price', s:['lagged history'], k:'input'},
+    {t:'MoDWT', s:['J levels → J detail series','+ 1 approximation,','all full length'], k:'prep'},
+    {t:'CNN', s:['1-D convolutions extract','shape features'], k:'model'},
+    {t:'RVFL', s:['random hidden layer (fixed)','+ direct link; output','weights by least squares'], k:'model'},
+    {t:'Next half-hour price', s:['scored by season, 2022'], k:'out'}
+  ], {extraH:46, extra:function(W,H){ return '<rect x="'+(W/2-245)+'" y="'+(H-40)+'" width="490" height="30" rx="8" fill="#fff" stroke="#6d5bd0" stroke-dasharray="5 3"/><text x="'+(W/2)+'" y="'+(H-21)+'" text-anchor="middle" class="ts" fill="#5b21b6">Bayesian optimisation loop: re-run with new lags / levels / filters, keep the best validation score</text>'; }});
+  flow('d-liu', [
+    {par:[{t:'AEMO market notices', s:['free text: LOR, constraints,','interventions ...'], k:'input'},{t:'Price history', s:['NEM spot, SA and NSW'], k:'input'}]},
+    {par:[{t:'LLM fine-tuned with QLoRA', s:['reads each notice → region,','window, event type'], k:'model'},{t:'Wavelet transform', s:['denoised price components'], k:'prep'}]},
+    {par:[{t:'Event time series', s:['1 when a notice is active'], k:'prep'},{t:'CNN-LSTM', s:['convolution then recurrence','over price + events'], k:'model'}]},
+    {t:'Adjusted price forecast', s:['raised during active events'], k:'out'}
+  ]);
+  flow('d-malyala', [
+    {t:'Price + aggregate demand', s:['state-wide RRP and','total demand history','(no weather by design)'], k:'input'},
+    {par:[{t:'GPI: Graph Patch Informer', s:['patches → graph layer →','sparse attention'], k:'model'},{t:'DSSM: GRU state-space', s:['hidden state = demand','drives price'], k:'model'}]},
+    {t:'Fusion + feed-forward', s:['smooth L1 loss'], k:'model'},
+    {t:'RRP forecast', s:['(+ demand)'], k:'out'}
+  ]);
+  flow('d-sinclair', [
+    {par:[{t:'Past 96 half-hours (48 h)', s:['RRP, demand, interchange,','weather obs, calendar sin/cos'], k:'input'},{t:'Next 32 half-hours (16 h)', s:['AEMO pre-dispatch RRP & demand,','weather forecast, hours-to-delivery'], k:'input'}]},
+    {par:[{t:'Encoder × 3 layers', s:['4-head self-attention','+ feed-forward 512, d 128','pre-LayerNorm, residuals'], k:'model'},{t:'Decoder × 3 layers', s:['self-attention over future rows,','cross-attention to encoder','+ feed-forward'], k:'model'}]},
+    {t:'LayerNorm + linear', s:['one price per future step,','all 32 in one pass'], k:'model'},
+    {t:'RRP for +0.5 h … +16 h', s:['scored at 2, 4, 8, 12, 16 h'], k:'out'}
+  ], {w:190});
+  (function(){ var el=document.getElementById('d-variants'); if(!el)return; var v=[{n:'(a) Enc-dec, parallel',enc:1,dec:1,ar:0,note:'best in VIC after TFT'},{n:'(b) Enc-dec, autoregressive',enc:1,dec:1,ar:1,note:'slower, 2-4 pts worse'},{n:'(c) Encoder-only',enc:1,dec:0,ar:0,note:'no future covariates: 43-65 %'},{n:'(d) Decoder-only, parallel',enc:0,dec:1,ar:0,note:'best in NSW & QLD'},{n:'(e) Decoder-only, autoregressive',enc:0,dec:1,ar:1,note:'close behind (d)'}];
+    var w=210,h=170,gap=14,W=v.length*(w+gap)+gap,H=h+20; var s='<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">';
+    v.forEach(function(x,i){ var x0=gap+i*(w+gap); s+='<rect x="'+x0+'" y="8" width="'+w+'" height="'+h+'" rx="10" fill="#fff" stroke="#e5e7eb"/>'; s+='<text x="'+(x0+w/2)+'" y="28" text-anchor="middle" class="ti">'+esc(x.n)+'</text>';
+      s+='<rect x="'+(x0+12)+'" y="40" width="86" height="36" rx="6" class="box-input" opacity="'+(x.enc?1:0.25)+'"/><text x="'+(x0+55)+'" y="62" text-anchor="middle" class="ts">past 48 h</text>'; s+='<rect x="'+(x0+112)+'" y="40" width="86" height="36" rx="6" class="box-input" opacity="'+(x.dec?1:0.25)+'"/><text x="'+(x0+155)+'" y="62" text-anchor="middle" class="ts">future covariates</text>';
+      s+='<rect x="'+(x0+12)+'" y="88" width="86" height="36" rx="6" class="box-model" opacity="'+(x.enc?1:0.25)+'"/><text x="'+(x0+55)+'" y="110" text-anchor="middle" class="ts">encoder</text>'; s+='<rect x="'+(x0+112)+'" y="88" width="86" height="36" rx="6" class="box-model" opacity="'+(x.dec?1:0.25)+'"/><text x="'+(x0+155)+'" y="110" text-anchor="middle" class="ts">decoder</text>';
+      if(x.enc&&x.dec) s+='<path d="M'+(x0+98)+' 106 L'+(x0+112)+' 106" stroke="#6b7280" stroke-width="1.4"/>'; s+='<rect x="'+(x0+12)+'" y="136" width="186" height="26" rx="6" class="box-out"/><text x="'+(x0+105)+'" y="153" text-anchor="middle" class="ts">'+(x.ar?'32 prices, one step at a time':'32 prices in one pass')+'</text>'; s+='<text x="'+(x0+w/2)+'" y="'+(h+16)+'" text-anchor="middle" class="ts" fill="#6b7280">'+esc(x.note)+'</text>'; });
+    el.innerHTML=s+'</svg>'; })();
+  (function(){ var el=document.getElementById('d-baselines'); if(!el)return; var v=[{n:'Two-layer LSTM',rows:['past + future covariates','LSTM → LSTM → dense'],sees:'both'},{n:'Temporal Fusion Transformer',rows:['variable selection → LSTM','→ attention → quantiles'],sees:'both'},{n:'PatchTST',rows:['past only, patch 24 / stride 6','encoder-only, per-channel'],sees:'past'},{n:'TimesFM',rows:['past price only, zero-shot','pre-trained decoder-only'],sees:'past'},{n:'AEMO pre-dispatch',rows:['dispatch engine output','at each run, per horizon'],sees:'none'}];
+    var w=210,h=120,gap=14,W=v.length*(w+gap)+gap,H=h+16; var s='<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">';
+    v.forEach(function(x,i){ var x0=gap+i*(w+gap); s+='<rect x="'+x0+'" y="8" width="'+w+'" height="'+h+'" rx="10" fill="#fff" stroke="#e5e7eb"/>'; s+='<text x="'+(x0+w/2)+'" y="28" text-anchor="middle" class="ti">'+esc(x.n)+'</text>'; s+='<rect x="'+(x0+12)+'" y="40" width="86" height="30" rx="6" class="box-input" opacity="'+(x.sees!=='none'?1:0.25)+'"/><text x="'+(x0+55)+'" y="59" text-anchor="middle" class="ts">past 48 h</text>'; s+='<rect x="'+(x0+112)+'" y="40" width="86" height="30" rx="6" class="box-input" opacity="'+(x.sees==='both'?1:0.25)+'"/><text x="'+(x0+155)+'" y="59" text-anchor="middle" class="ts">future covariates</text>'; x.rows.forEach(function(rw,j){ s+='<text x="'+(x0+w/2)+'" y="'+(92+j*15)+'" text-anchor="middle" class="ts">'+esc(rw)+'</text>'; }); });
+    el.innerHTML=s+'</svg>'; })();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deep learning for NEM spot prices: the papers, and every idea inside them, explained</title>
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --bg:#ffffff; --panel:#f8fafc;
+    --input:#dbeafe; --input-ink:#1e40af;
+    --prep:#fef3c7;  --prep-ink:#92400e;
+    --model:#ede9fe; --model-ink:#5b21b6;
+    --out:#dcfce7;   --out-ink:#166534;
+    --bench:#fee2e2; --bench-ink:#991b1b;
+    --accent:#6d5bd0;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;font-size:15.5px}
+  header{padding:36px 28px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#f5f3ff 0%,#fff 100%)}
+  header h1{margin:0 0 6px;font-size:28px;line-height:1.2}
+  header p{margin:4px 0;max-width:980px;color:var(--muted)}
+  main{max-width:1180px;margin:0 auto;padding:12px 28px 80px}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 8px}
+  nav.toc a{font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);background:#fff}
+  nav.toc a:hover{border-color:var(--accent);color:var(--accent)}
+  nav.toc a.part{background:var(--model);border-color:#ddd6fe;color:var(--model-ink);font-weight:600}
+  h2{font-size:24px;margin:52px 0 8px;padding-top:14px;border-top:3px solid var(--accent)}
+  h2 .part-label{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+  h3{font-size:19px;margin:30px 0 6px;padding-top:8px;border-top:1px solid var(--line)}
+  h4{font-size:13.5px;margin:16px 0 4px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  p{margin:6px 0 10px}
+  .lead{font-size:16.5px}
+  .one{font-size:16px;background:var(--panel);border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:8px 0 12px}
+  .one b{color:var(--accent)}
+  .note{background:var(--panel);border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0 14px;font-size:14px}
+  .warn{border-left-color:#d97706;background:#fffbeb}
+  .confuse{border-left-color:#b91c1c;background:#fff7f7}
+  .confuse b:first-child{color:#991b1b}
+  .card{border:1px solid var(--line);border-radius:12px;padding:18px 20px 14px;margin:22px 0;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card h2{border:0;margin-top:0;padding-top:0;font-size:22px}
+  .card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin:2px 0 10px}
+  .badge{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);margin-right:4px;vertical-align:middle}
+  .badge.full{background:var(--out);color:var(--out-ink);border-color:#bbf7d0}
+  .badge.part{background:var(--prep);color:var(--prep-ink);border-color:#fde68a}
+  .badge.abs{background:var(--bench);color:var(--bench-ink);border-color:#fecaca}
+  .badge.price{background:var(--model);color:var(--model-ink);border-color:#ddd6fe}
+  .badge.demand{background:var(--input);color:var(--input-ink);border-color:#bfdbfe}
+  .badge.ops{background:#e0f2fe;color:#075985;border-color:#bae6fd}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0 14px}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:var(--panel);font-weight:600}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.best td{background:#f0fdf4;font-weight:600}
+  tr.bench td{background:#fff7f7}
+  table.ex{width:auto;min-width:320px}
+  table.ex td,table.ex th{padding:4px 10px}
+  .small{font-size:12.5px;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media (max-width:860px){.grid2,.grid3{grid-template-columns:1fr}}
+  .diagram{border:1px dashed var(--line);border-radius:10px;padding:10px 8px 4px;background:#fcfcfd;margin:8px 0 12px;overflow-x:auto}
+  .diagram .cap{font-size:13px;color:var(--muted);margin:4px 6px 6px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted);margin:2px 6px 6px}
+  .legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;border:1px solid rgba(0,0,0,.15)}
+  .legend .li::before{background:var(--input)} .legend .lp::before{background:var(--prep)} .legend .lm::before{background:var(--model)} .legend .lo::before{background:var(--out)} .legend .lb::before{background:var(--bench)}
+  svg text{font-family:inherit}
+  .box-input{fill:var(--input)} .box-prep{fill:var(--prep)} .box-model{fill:var(--model)} .box-out{fill:var(--out)} .box-bench{fill:var(--bench)}
+  .ti{font-size:12.5px;font-weight:600;fill:var(--ink)} .ts{font-size:11px;fill:#4b5563}
+  .concept{border:1px solid var(--line);border-radius:12px;padding:14px 18px 10px;margin:18px 0;background:#fff}
+  .concept h3{border:0;margin:0 0 4px;padding:0}
+  .concept .where{font-size:13px;color:var(--muted);margin:4px 0 8px}
+  .concept .where a{color:var(--accent)}
+  .ex{background:var(--panel);border-radius:8px;padding:10px 14px;margin:8px 0 12px;font-size:14px}
+  .ex .exh{font-weight:600;color:var(--accent);font-size:13px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+  .formula{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:6px 0;display:inline-block}
+  .timeline{position:relative;margin:18px 0 6px;padding-left:22px;border-left:3px solid #ddd6fe}
+  .tl{position:relative;margin:0 0 16px}
+  .tl::before{content:"";position:absolute;left:-29px;top:6px;width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 2px #ddd6fe}
+  .tl .when{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .tl .what{font-weight:600}
+  .tl a{color:var(--accent)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;background:var(--panel);padding:1px 4px;border-radius:4px}
+  details{margin:6px 0 10px}
+  summary{cursor:pointer;color:var(--accent);font-size:14px}
+  .src a{color:var(--accent);word-break:break-all}
+  .kv{display:grid;grid-template-columns:190px 1fr;gap:4px 12px;font-size:14px;margin:6px 0 10px}
+  .kv div:nth-child(odd){color:var(--muted)}
+  a.t{color:var(--model-ink);text-decoration:none;border-bottom:1px dotted var(--model-ink)}
+  a.t:hover{background:var(--model)}
+  ol.steps{padding-left:22px}
+  ol.steps li{margin:4px 0}
+  .v{font-variant-numeric:tabular-nums;font-weight:600;color:#111827}
+  .btn{display:inline-block;padding:6px 12px;border:1px solid var(--accent);color:var(--accent);border-radius:8px;text-decoration:none;font-size:13.5px;margin:4px 6px 4px 0}
+  .btn:hover{background:var(--model)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Deep learning for NEM spot prices: the papers, and every idea inside them, explained</h1>
+  <p class="lead">A directory of every Australian National Electricity Market (NEM) study cited in the related-works section of <em>Learning the Grid</em> (Sinclair, Shepley &amp; Hajati, Applied Sciences 2026), plus that paper itself. Parts 1 to 4 teach the ideas from the ground up, assuming only a basic feel for time series and neural networks. Part 5 is the papers, with every technical term linked back to its explanation.</p>
+  <p>Every worked example on this page is computed live by the page's own script from the small numbers shown, so the arithmetic and the formulas cannot disagree. Companion page: <a href="rnn_explainer.html" class="btn">LSTM, GRU and TCN: a worked numerical walkthrough</a></p>
+</header>
+<main>
+
+<nav class="toc">
+  <a href="#timeline">Timeline</a>
+  <a href="#overview">Overview table</a>
+  <a class="part" href="#part1">1 · How a forecast is judged</a>
+  <a class="part" href="#part2">2 · Building blocks</a>
+  <a class="part" href="#part3">3 · Attention and transformers</a>
+  <a class="part" href="#part4">4 · Beyond forecasting</a>
+  <a class="part" href="#part5">5 · The papers</a>
+  <a href="#tan2023">Tan 2023</a>
+  <a href="#ghimire2023">Ghimire 2023</a>
+  <a href="#li2024">Li 2024</a>
+  <a href="#ghimire2024">Ghimire 2024</a>
+  <a href="#liu2024">Liu 2024</a>
+  <a href="#malyala2024">Malyala 2024</a>
+  <a href="#sinclair2026">Sinclair 2026</a>
+  <a href="#excluded">Left out</a>
+</nav>
+
+<div class="note">
+  <b>How to use this page.</b> If you want the papers first, jump to <a href="#part5">Part 5</a> and click any dotted-underlined term to be taken to its explanation, then use the browser back button. If you want to build up the ideas in order, read Parts 1 to 4 straight through; each concept is a box with the same shape: one sentence, the mechanism, a picture, a worked example with numbers, where it shows up in the papers, and the mistake people usually make with it.
+  <br><br>
+  <b>Provenance badges on the paper cards.</b>
+  <span class="badge full">Full text read</span> numbers copied from the paper's own tables.
+  <span class="badge part">Abstract + review table</span> numbers from the abstract or from the Energies 2025 review that re-tabulated the paper.
+  <span class="badge abs">Abstract + captions only</span> paywalled; no accuracy numbers shown.
+  Target badges: <span class="badge price">spot price</span> <span class="badge demand">demand</span> <span class="badge ops">battery bidding</span>.
+</div>
+
+<h2 id="timeline"><span class="part-label">Directory</span>Timeline: seven NEM papers, 2023 to 2026</h2>
+<p>The thread running through them: everyone starts from raw prices, finds them too noisy, and either (a) <a class="t" href="#c-hybrid">decomposes</a> the series before a neural network, (b) adds outside information (weather, market notices, AEMO's own forecasts), or (c) changes the network from <a class="t" href="#c-rnn">recurrent</a> to <a class="t" href="#c-attn">attention-based</a>. Sinclair 2026 is the first to do (b) and (c) together and to benchmark against AEMO's <a class="t" href="#c-nem">pre-dispatch</a> forecast.</p>
+<div class="timeline">
+  <div class="tl"><div class="when">March 2023 · Electric Power Systems Research</div><div class="what"><a href="#tan2023">Tan, Shen, Yu &amp; Lu</a> · ICEEMDAN-CNN+SSDAE · NSW day-ahead price</div><div class="small">Split the price series into frequency components, forecast each with a CNN feeding a stacked sparse denoising autoencoder, add them back up.</div></div>
+  <div class="tl"><div class="when">October 2023 · Energy and AI</div><div class="what"><a href="#ghimire2023">Ghimire, Nguyen-Huy, Al-Musaylh, Deo, Casillas-Pérez &amp; Salcedo-Sanz</a> · TNET · Queensland substation demand</div><div class="small">First NEM-area transformer, but for daily electricity demand, not price. Beat LSTM, BiLSTM, GRU, CNN and DNN at four Energex substations.</div></div>
+  <div class="tl"><div class="when">March 2024 · IEEE Trans. Energy Markets, Policy &amp; Regulation</div><div class="what"><a href="#li2024">Li, Wang, Zhang &amp; Wang</a> · TempDRL · battery bidding in spot + six FCAS markets</div><div class="small">Not a price forecaster: a transformer reads the last 160 minutes of seven market prices and a reinforcement-learning agent bids. Tested on all five NEM regions.</div></div>
+  <div class="tl"><div class="when">July 2024 (online) · Applied Energy</div><div class="what"><a href="#ghimire2024">Ghimire, Deo, Casillas-Pérez, Sharma, Salcedo-Sanz, Barua &amp; Acharya</a> · MoDWT-CRVFL · NSW half-hourly price</div><div class="small">Wavelet-decompose the price, CNN extracts features, a random-weight one-shot network (RVFL) does the regression, Bayesian optimisation picks the settings.</div></div>
+  <div class="tl"><div class="when">November 2024 · IECON (IEEE)</div><div class="what"><a href="#liu2024">Liu, Cai, Dalzell &amp; Mills</a> · fine-tuned LLM + CNN-LSTM · extreme prices in SA and NSW</div><div class="small">A large language model reads AEMO market notices and turns them into an event time series that a wavelet CNN-LSTM uses alongside price history.</div></div>
+  <div class="tl"><div class="when">December 2024 · ICSCGE (IEEE)</div><div class="what"><a href="#malyala2024">Malyala, Thattai, Malik &amp; Ravishankar</a> · GPI-DSSM · RRP from price and demand only</div><div class="small">Argues that state-wide weather is noise. A patch-based Informer transformer plus a GRU state-space memory forecast the regional reference price from price and aggregate demand alone.</div></div>
+  <div class="tl"><div class="when">December 2025 (Applied Sciences vol. 16, 2026)</div><div class="what"><a href="#sinclair2026">Sinclair, Shepley &amp; Hajati</a> · encoder-decoder / decoder-only / encoder-only transformers · NSW, QLD, VIC, 2 to 16 h ahead</div><div class="small">Plain transformers with AEMO pre-dispatch and weather forecasts as future inputs. Decoder-only wins in NSW and QLD; AEMO's own forecast has 2 to 3 times the error at 8 h and beyond.</div></div>
+</div>
+
+<h2 id="overview"><span class="part-label">Directory</span>Side-by-side overview</h2>
+<table>
+  <thead><tr><th>Paper</th><th>Target</th><th>Region(s)</th><th>Resolution / horizon</th><th>Data window</th><th>Inputs</th><th>Compared against AEMO?</th><th>Headline metric</th></tr></thead>
+  <tbody>
+    <tr><td><a href="#tan2023">Tan 2023</a></td><td>Spot price (day-ahead)</td><td>NSW1</td><td>Half-hourly, next day</td><td>About five years of history; four 3-day seasonal test windows</td><td>Price history plus related factors selected by correlation analysis</td><td>No</td><td><a class="t" href="#c-mape">MAPE</a> 6.0 to 7.0 % across seasons vs 13 to 17 % for a plain LSTM (via review)</td></tr>
+    <tr><td><a href="#ghimire2023">Ghimire 2023</a></td><td>Daily electricity demand</td><td>SE Queensland (4 Energex substations)</td><td>Daily, one day ahead</td><td>Jul 2011 to Jun 2021 train, Jul 2021 to Jun 2022 test</td><td>6 lagged demand values + 10 SILO climate variables</td><td>No</td><td>MAPE 4.8 to 7.5 % by site, best of six models at every site</td></tr>
+    <tr><td><a href="#li2024">Li 2024</a></td><td>Battery bids (revenue)</td><td>VIC, NSW, QLD, SA, TAS</td><td>5-minute intervals, look-back 160 min</td><td>2016: 10 months train, 2 months test</td><td>Seven market prices (spot + 6 contingency FCAS)</td><td>No (benchmarks are optimisers and other RL agents)</td><td>+15 to +32 % revenue over the best benchmark, by region</td></tr>
+    <tr><td><a href="#ghimire2024">Ghimire 2024</a></td><td>Spot price</td><td>NSW1</td><td>Half-hourly</td><td>Test year 2022, reported by season and annually</td><td>Wavelet-decomposed price history</td><td>No</td><td><a class="t" href="#c-kge">KGE</a> 0.972 vs 0.958 for the best decomposed LSTM, 0.708 for a plain LSTM</td></tr>
+    <tr><td><a href="#liu2024">Liu 2024</a></td><td>Spot price during extreme events</td><td>SA and NSW (examples shown)</td><td>Not stated in abstract; example days 4 May and 21 Jun 2023</td><td>Not stated in abstract</td><td>Price history + LLM-extracted events from AEMO market notices</td><td>No</td><td>Not reachable (paywalled)</td></tr>
+    <tr><td><a href="#malyala2024">Malyala 2024</a></td><td>Regional reference price (and demand)</td><td>State-wide NEM region (not named in abstract)</td><td>Not stated in abstract</td><td>Not stated in abstract</td><td>Price and aggregate demand only, deliberately no weather</td><td>No</td><td>Not reachable (paywalled)</td></tr>
+    <tr class="best"><td><a href="#sinclair2026">Sinclair 2026</a></td><td>Spot price (RRP)</td><td>NSW1, QLD1, VIC1</td><td>Half-hourly, 2 to 16 h ahead (32 steps)</td><td>Nov 2022 to Aug 2025, 49,447 half-hours, 80:20 split</td><td>48 h of price, demand, interchange, weather, calendar; 16 h of AEMO pre-dispatch and weather forecasts</td><td>Yes: AEMO pre-dispatch is a row in every table</td><td><a class="t" href="#c-nmape">nMAPE</a> 33.6 to 39.2 % (NSW) vs 65.6 to 116 % for AEMO</td></tr>
+  </tbody>
+</table>
+<div class="note warn">Metrics are not comparable across rows. Tan and Ghimire 2024 report errors on normalised or smoothed series and on short or single-year windows; Sinclair reports a normalised MAPE (mean absolute error divided by the mean price) over a 34-month period that contains the 2024 to 2025 spike seasons. Within each paper, though, the comparison against its own baselines is fair. Part 1 explains each metric.</div>

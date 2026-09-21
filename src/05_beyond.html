@@ -1,0 +1,44 @@
+
+<h2 id="part4"><span class="part-label">Part 4</span>Beyond point forecasting: state-space models, reinforcement learning, and explaining a model</h2>
+
+<div class="concept" id="c-ssm">
+  <h3>State-space models and the GRU-based DSSM</h3>
+  <p class="one"><b>In one sentence.</b> A state-space model says there is a hidden state that evolves step to step and the thing you observe is a noisy function of that state; a deep state-space model lets a network (here a GRU) learn the evolution, and Malyala's DSSM ties the hidden state to aggregate demand.</p>
+  <span class="formula">state<sub>t</sub> = F(state<sub>t−1</sub>, input<sub>t</sub>) + noise</span> <span class="formula">price<sub>t</sub> = G(state<sub>t</sub>) + noise</span>
+  <p>The classical version (Kalman filter) has F and G linear. The deep version makes F a GRU update and G a small network. The design choice in DSSM is to make the state <em>mean something</em>: by training it to reproduce demand as well as price, the state becomes an estimate of system load, and the output layer learns the demand-to-price curve. That is a supply-curve model in disguise: price steps up when the state crosses the level where more expensive plant is needed.</p>
+  <div class="diagram"><div id="d-ssm"></div><div class="cap">Hidden state evolving under the GRU; each observation is read off through G. The dotted supervision arrow is what makes the state resemble demand.</div></div>
+  <div class="ex"><div class="exh">Why "no weather" is a coherent choice</div>
+    Weather matters to price only through demand and rooftop solar. If the state is demand and the model has demand history, the weather is already inside the state. What it cannot do is anticipate a demand change that has not started yet (tomorrow's heatwave); that is precisely what a weather <em>forecast</em> covariate adds in Sinclair's model.
+  </div>
+</div>
+
+<div class="concept" id="c-rl">
+  <h3>Reinforcement learning, actor-critic, and Soft Actor-Critic (SAC)</h3>
+  <p class="one"><b>In one sentence.</b> Instead of predicting a price and then optimising against it, a reinforcement-learning agent maps what it sees (state) directly to what it does (action) and is trained by the money it makes (reward); the actor is the network that chooses actions, the critic is the network that estimates how much future reward an action leads to, and SAC adds a bonus for keeping the actor's choices random enough to keep exploring.</p>
+  <div class="kv">
+    <div>State</div><div>In Li 2024: the 64-number summary of the last 160 minutes of seven prices (from the transformer) plus the battery's state of charge.</div>
+    <div>Action</div><div>Continuous: charge/discharge power for the spot market and a bid quantity for each of the six FCAS markets.</div>
+    <div>Reward</div><div>Spot revenue (discharge MW × price, negative when charging) plus FCAS availability payments for the interval.</div>
+    <div>Policy π(a | s)</div><div>The actor: a network outputting a distribution over actions; SAC samples from it.</div>
+    <div>Q(s, a)</div><div>The critic: expected discounted future reward from taking a in s. Discount γ = 0.99 means reward n steps ahead counts 0.99<sup>n</sup>.</div>
+    <div>Entropy bonus</div><div>SAC maximises reward + α × entropy of π, so the actor stays stochastic and does not lock onto one habit before it has seen enough spikes.</div>
+  </div>
+  <div class="diagram"><div id="d-rl"></div><div class="cap">The loop. The transformer's weights are updated by the same gradient as the actor's, so it learns whatever price features make money, not whatever features predict price.</div></div>
+  <div class="ex" id="c-milp"><div class="exh">Worked example: why forecast-then-optimise can lose to an agent</div>
+    A 1 MWh battery, three intervals, actual prices <span data-v="rl.p"></span>. Perfect-information optimisation (PIO): charge at <span data-v="rl.buy"></span>, discharge at <span data-v="rl.sell"></span>, revenue A$<span class="v" data-v="rl.pio"></span>. A forecaster that predicted <span data-v="rl.f"></span> would tell the optimiser to charge at interval 2 and discharge at interval 3 for a predicted A$<span data-v="rl.fpred"></span>; at the real prices that buys at A$300 and sells at A$40, earning A$<span class="v" data-v="rl.fact"></span>. An agent trained on many such days learns "when the last 160 minutes look like this, discharge in the next interval" without ever committing to a price number, and Li's Table II shows this gained 15 to 32 % over the transformer-forecast-then-optimise benchmark on the same data. The catch: the agent has no guarantee, only a track record.
+  </div>
+  <p><b>The benchmarks in Li's table.</b> <b>MILP</b> (mixed-integer linear programming) is the exact optimiser used by LP&amp;O, TP&amp;O and PIO: given a price path, it solves for the charge/discharge schedule that maximises revenue subject to the battery's power, energy and efficiency limits. <b>LP&amp;O</b> feeds it an LSTM's forecast, <b>TP&amp;O</b> a transformer's forecast, <b>PIO</b> the actual prices (an upper bound no live strategy can reach). <b>MLP-DRL</b> is the same SAC agent with a plain dense network instead of the transformer summarising the price history.</p>
+</div>
+
+<div class="concept" id="c-shap">
+  <h3>SHAP: attributing a prediction to its inputs</h3>
+  <p class="one"><b>In one sentence.</b> SHAP splits the difference between a model's prediction and its average prediction into one share per input, where each share is the input's average marginal contribution over every possible order of adding the inputs (the Shapley value from game theory).</p>
+  <div class="ex"><div class="exh">Worked example with two inputs, by hand</div>
+    Model output for a half-hour: with no inputs (the average prediction) A$100; with only the pre-dispatch price known, A$180; with only the weather forecast known, A$110; with both, A$200.<br>
+    Order "pre-dispatch first, then weather": pre-dispatch adds 180 − 100 = 80, weather adds 200 − 180 = 20.<br>
+    Order "weather first, then pre-dispatch": weather adds 110 − 100 = 10, pre-dispatch adds 200 − 110 = 90.<br>
+    Shapley value = average over orders: pre-dispatch = (80 + 90) / 2 = <span class="v">85</span>, weather = (20 + 10) / 2 = <span class="v">15</span>. They add to 100 = 200 − 100, as they must. Feature importance for the whole test set is the mean of |SHAP| over all half-hours; that is Sinclair's Figure 8, where the pre-dispatch NSW price alone has more than 60 % of the total.
+  </div>
+  <div class="diagram"><div id="d-shap"></div><div class="cap">A SHAP dependence plot: each dot is one half-hour, the horizontal axis is the value of one input (forecast demand), the vertical axis is that input's SHAP contribution, colour is a second input (temperature). Sinclair's Figure 9 shows demand's contribution rising monotonically but with the slope depending on workday, temperature and time of day.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> A high SHAP importance for the pre-dispatch price does not mean the model "copies AEMO". It means that changing the pre-dispatch input moves the output most. The model still halves AEMO's error, so what it has learned is a corrected mapping from pre-dispatch to outcome.</div>
+</div>

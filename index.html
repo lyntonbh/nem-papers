@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deep learning for NEM spot prices: the papers, and every idea inside them, explained</title>
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --bg:#ffffff; --panel:#f8fafc;
+    --input:#dbeafe; --input-ink:#1e40af;
+    --prep:#fef3c7;  --prep-ink:#92400e;
+    --model:#ede9fe; --model-ink:#5b21b6;
+    --out:#dcfce7;   --out-ink:#166534;
+    --bench:#fee2e2; --bench-ink:#991b1b;
+    --accent:#6d5bd0;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;font-size:15.5px}
+  header{padding:36px 28px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#f5f3ff 0%,#fff 100%)}
+  header h1{margin:0 0 6px;font-size:28px;line-height:1.2}
+  header p{margin:4px 0;max-width:980px;color:var(--muted)}
+  main{max-width:1180px;margin:0 auto;padding:12px 28px 80px}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 8px}
+  nav.toc a{font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);background:#fff}
+  nav.toc a:hover{border-color:var(--accent);color:var(--accent)}
+  nav.toc a.part{background:var(--model);border-color:#ddd6fe;color:var(--model-ink);font-weight:600}
+  h2{font-size:24px;margin:52px 0 8px;padding-top:14px;border-top:3px solid var(--accent)}
+  h2 .part-label{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+  h3{font-size:19px;margin:30px 0 6px;padding-top:8px;border-top:1px solid var(--line)}
+  h4{font-size:13.5px;margin:16px 0 4px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  p{margin:6px 0 10px}
+  .lead{font-size:16.5px}
+  .one{font-size:16px;background:var(--panel);border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:8px 0 12px}
+  .one b{color:var(--accent)}
+  .note{background:var(--panel);border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0 14px;font-size:14px}
+  .warn{border-left-color:#d97706;background:#fffbeb}
+  .confuse{border-left-color:#b91c1c;background:#fff7f7}
+  .confuse b:first-child{color:#991b1b}
+  .card{border:1px solid var(--line);border-radius:12px;padding:18px 20px 14px;margin:22px 0;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card h2{border:0;margin-top:0;padding-top:0;font-size:22px}
+  .card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin:2px 0 10px}
+  .badge{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);margin-right:4px;vertical-align:middle}
+  .badge.full{background:var(--out);color:var(--out-ink);border-color:#bbf7d0}
+  .badge.part{background:var(--prep);color:var(--prep-ink);border-color:#fde68a}
+  .badge.abs{background:var(--bench);color:var(--bench-ink);border-color:#fecaca}
+  .badge.price{background:var(--model);color:var(--model-ink);border-color:#ddd6fe}
+  .badge.demand{background:var(--input);color:var(--input-ink);border-color:#bfdbfe}
+  .badge.ops{background:#e0f2fe;color:#075985;border-color:#bae6fd}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0 14px}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:var(--panel);font-weight:600}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.best td{background:#f0fdf4;font-weight:600}
+  tr.bench td{background:#fff7f7}
+  table.ex{width:auto;min-width:320px}
+  table.ex td,table.ex th{padding:4px 10px}
+  .small{font-size:12.5px;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media (max-width:860px){.grid2,.grid3{grid-template-columns:1fr}}
+  .diagram{border:1px dashed var(--line);border-radius:10px;padding:10px 8px 4px;background:#fcfcfd;margin:8px 0 12px;overflow-x:auto}
+  .diagram .cap{font-size:13px;color:var(--muted);margin:4px 6px 6px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted);margin:2px 6px 6px}
+  .legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;border:1px solid rgba(0,0,0,.15)}
+  .legend .li::before{background:var(--input)} .legend .lp::before{background:var(--prep)} .legend .lm::before{background:var(--model)} .legend .lo::before{background:var(--out)} .legend .lb::before{background:var(--bench)}
+  svg text{font-family:inherit}
+  .box-input{fill:var(--input)} .box-prep{fill:var(--prep)} .box-model{fill:var(--model)} .box-out{fill:var(--out)} .box-bench{fill:var(--bench)}
+  .ti{font-size:12.5px;font-weight:600;fill:var(--ink)} .ts{font-size:11px;fill:#4b5563}
+  .concept{border:1px solid var(--line);border-radius:12px;padding:14px 18px 10px;margin:18px 0;background:#fff}
+  .concept h3{border:0;margin:0 0 4px;padding:0}
+  .concept .where{font-size:13px;color:var(--muted);margin:4px 0 8px}
+  .concept .where a{color:var(--accent)}
+  .ex{background:var(--panel);border-radius:8px;padding:10px 14px;margin:8px 0 12px;font-size:14px}
+  .ex .exh{font-weight:600;color:var(--accent);font-size:13px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+  .formula{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:6px 0;display:inline-block}
+  .timeline{position:relative;margin:18px 0 6px;padding-left:22px;border-left:3px solid #ddd6fe}
+  .tl{position:relative;margin:0 0 16px}
+  .tl::before{content:"";position:absolute;left:-29px;top:6px;width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 2px #ddd6fe}
+  .tl .when{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .tl .what{font-weight:600}
+  .tl a{color:var(--accent)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;background:var(--panel);padding:1px 4px;border-radius:4px}
+  details{margin:6px 0 10px}
+  summary{cursor:pointer;color:var(--accent);font-size:14px}
+  .src a{color:var(--accent);word-break:break-all}
+  .kv{display:grid;grid-template-columns:190px 1fr;gap:4px 12px;font-size:14px;margin:6px 0 10px}
+  .kv div:nth-child(odd){color:var(--muted)}
+  a.t{color:var(--model-ink);text-decoration:none;border-bottom:1px dotted var(--model-ink)}
+  a.t:hover{background:var(--model)}
+  ol.steps{padding-left:22px}
+  ol.steps li{margin:4px 0}
+  .v{font-variant-numeric:tabular-nums;font-weight:600;color:#111827}
+  .btn{display:inline-block;padding:6px 12px;border:1px solid var(--accent);color:var(--accent);border-radius:8px;text-decoration:none;font-size:13.5px;margin:4px 6px 4px 0}
+  .btn:hover{background:var(--model)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Deep learning for NEM spot prices: the papers, and every idea inside them, explained</h1>
+  <p class="lead">A directory of every Australian National Electricity Market (NEM) study cited in the related-works section of <em>Learning the Grid</em> (Sinclair, Shepley &amp; Hajati, Applied Sciences 2026), plus that paper itself. Parts 1 to 4 teach the ideas from the ground up, assuming only a basic feel for time series and neural networks. Part 5 is the papers, with every technical term linked back to its explanation.</p>
+  <p>Every worked example on this page is computed live by the page's own script from the small numbers shown, so the arithmetic and the formulas cannot disagree. Companion page: <a href="rnn_explainer.html" class="btn">LSTM, GRU and TCN: a worked numerical walkthrough</a></p>
+</header>
+<main>
+
+<nav class="toc">
+  <a href="#timeline">Timeline</a>
+  <a href="#overview">Overview table</a>
+  <a class="part" href="#part1">1 · How a forecast is judged</a>
+  <a class="part" href="#part2">2 · Building blocks</a>
+  <a class="part" href="#part3">3 · Attention and transformers</a>
+  <a class="part" href="#part4">4 · Beyond forecasting</a>
+  <a class="part" href="#part5">5 · The papers</a>
+  <a href="#tan2023">Tan 2023</a>
+  <a href="#ghimire2023">Ghimire 2023</a>
+  <a href="#li2024">Li 2024</a>
+  <a href="#ghimire2024">Ghimire 2024</a>
+  <a href="#liu2024">Liu 2024</a>
+  <a href="#malyala2024">Malyala 2024</a>
+  <a href="#sinclair2026">Sinclair 2026</a>
+  <a href="#excluded">Left out</a>
+</nav>
+
+<div class="note">
+  <b>How to use this page.</b> If you want the papers first, jump to <a href="#part5">Part 5</a> and click any dotted-underlined term to be taken to its explanation, then use the browser back button. If you want to build up the ideas in order, read Parts 1 to 4 straight through; each concept is a box with the same shape: one sentence, the mechanism, a picture, a worked example with numbers, where it shows up in the papers, and the mistake people usually make with it.
+  <br><br>
+  <b>Provenance badges on the paper cards.</b>
+  <span class="badge full">Full text read</span> numbers copied from the paper's own tables.
+  <span class="badge part">Abstract + review table</span> numbers from the abstract or from the Energies 2025 review that re-tabulated the paper.
+  <span class="badge abs">Abstract + captions only</span> paywalled; no accuracy numbers shown.
+  Target badges: <span class="badge price">spot price</span> <span class="badge demand">demand</span> <span class="badge ops">battery bidding</span>.
+</div>
+
+<h2 id="timeline"><span class="part-label">Directory</span>Timeline: seven NEM papers, 2023 to 2026</h2>
+<p>The thread running through them: everyone starts from raw prices, finds them too noisy, and either (a) <a class="t" href="#c-hybrid">decomposes</a> the series before a neural network, (b) adds outside information (weather, market notices, AEMO's own forecasts), or (c) changes the network from <a class="t" href="#c-rnn">recurrent</a> to <a class="t" href="#c-attn">attention-based</a>. Sinclair 2026 is the first to do (b) and (c) together and to benchmark against AEMO's <a class="t" href="#c-nem">pre-dispatch</a> forecast.</p>
+<div class="timeline">
+  <div class="tl"><div class="when">March 2023 · Electric Power Systems Research</div><div class="what"><a href="#tan2023">Tan, Shen, Yu &amp; Lu</a> · ICEEMDAN-CNN+SSDAE · NSW day-ahead price</div><div class="small">Split the price series into frequency components, forecast each with a CNN feeding a stacked sparse denoising autoencoder, add them back up.</div></div>
+  <div class="tl"><div class="when">October 2023 · Energy and AI</div><div class="what"><a href="#ghimire2023">Ghimire, Nguyen-Huy, Al-Musaylh, Deo, Casillas-Pérez &amp; Salcedo-Sanz</a> · TNET · Queensland substation demand</div><div class="small">First NEM-area transformer, but for daily electricity demand, not price. Beat LSTM, BiLSTM, GRU, CNN and DNN at four Energex substations.</div></div>
+  <div class="tl"><div class="when">March 2024 · IEEE Trans. Energy Markets, Policy &amp; Regulation</div><div class="what"><a href="#li2024">Li, Wang, Zhang &amp; Wang</a> · TempDRL · battery bidding in spot + six FCAS markets</div><div class="small">Not a price forecaster: a transformer reads the last 160 minutes of seven market prices and a reinforcement-learning agent bids. Tested on all five NEM regions.</div></div>
+  <div class="tl"><div class="when">July 2024 (online) · Applied Energy</div><div class="what"><a href="#ghimire2024">Ghimire, Deo, Casillas-Pérez, Sharma, Salcedo-Sanz, Barua &amp; Acharya</a> · MoDWT-CRVFL · NSW half-hourly price</div><div class="small">Wavelet-decompose the price, CNN extracts features, a random-weight one-shot network (RVFL) does the regression, Bayesian optimisation picks the settings.</div></div>
+  <div class="tl"><div class="when">November 2024 · IECON (IEEE)</div><div class="what"><a href="#liu2024">Liu, Cai, Dalzell &amp; Mills</a> · fine-tuned LLM + CNN-LSTM · extreme prices in SA and NSW</div><div class="small">A large language model reads AEMO market notices and turns them into an event time series that a wavelet CNN-LSTM uses alongside price history.</div></div>
+  <div class="tl"><div class="when">December 2024 · ICSCGE (IEEE)</div><div class="what"><a href="#malyala2024">Malyala, Thattai, Malik &amp; Ravishankar</a> · GPI-DSSM · RRP from price and demand only</div><div class="small">Argues that state-wide weather is noise. A patch-based Informer transformer plus a GRU state-space memory forecast the regional reference price from price and aggregate demand alone.</div></div>
+  <div class="tl"><div class="when">December 2025 (Applied Sciences vol. 16, 2026)</div><div class="what"><a href="#sinclair2026">Sinclair, Shepley &amp; Hajati</a> · encoder-decoder / decoder-only / encoder-only transformers · NSW, QLD, VIC, 2 to 16 h ahead</div><div class="small">Plain transformers with AEMO pre-dispatch and weather forecasts as future inputs. Decoder-only wins in NSW and QLD; AEMO's own forecast has 2 to 3 times the error at 8 h and beyond.</div></div>
+</div>
+
+<h2 id="overview"><span class="part-label">Directory</span>Side-by-side overview</h2>
+<table>
+  <thead><tr><th>Paper</th><th>Target</th><th>Region(s)</th><th>Resolution / horizon</th><th>Data window</th><th>Inputs</th><th>Compared against AEMO?</th><th>Headline metric</th></tr></thead>
+  <tbody>
+    <tr><td><a href="#tan2023">Tan 2023</a></td><td>Spot price (day-ahead)</td><td>NSW1</td><td>Half-hourly, next day</td><td>About five years of history; four 3-day seasonal test windows</td><td>Price history plus related factors selected by correlation analysis</td><td>No</td><td><a class="t" href="#c-mape">MAPE</a> 6.0 to 7.0 % across seasons vs 13 to 17 % for a plain LSTM (via review)</td></tr>
+    <tr><td><a href="#ghimire2023">Ghimire 2023</a></td><td>Daily electricity demand</td><td>SE Queensland (4 Energex substations)</td><td>Daily, one day ahead</td><td>Jul 2011 to Jun 2021 train, Jul 2021 to Jun 2022 test</td><td>6 lagged demand values + 10 SILO climate variables</td><td>No</td><td>MAPE 4.8 to 7.5 % by site, best of six models at every site</td></tr>
+    <tr><td><a href="#li2024">Li 2024</a></td><td>Battery bids (revenue)</td><td>VIC, NSW, QLD, SA, TAS</td><td>5-minute intervals, look-back 160 min</td><td>2016: 10 months train, 2 months test</td><td>Seven market prices (spot + 6 contingency FCAS)</td><td>No (benchmarks are optimisers and other RL agents)</td><td>+15 to +32 % revenue over the best benchmark, by region</td></tr>
+    <tr><td><a href="#ghimire2024">Ghimire 2024</a></td><td>Spot price</td><td>NSW1</td><td>Half-hourly</td><td>Test year 2022, reported by season and annually</td><td>Wavelet-decomposed price history</td><td>No</td><td><a class="t" href="#c-kge">KGE</a> 0.972 vs 0.958 for the best decomposed LSTM, 0.708 for a plain LSTM</td></tr>
+    <tr><td><a href="#liu2024">Liu 2024</a></td><td>Spot price during extreme events</td><td>SA and NSW (examples shown)</td><td>Not stated in abstract; example days 4 May and 21 Jun 2023</td><td>Not stated in abstract</td><td>Price history + LLM-extracted events from AEMO market notices</td><td>No</td><td>Not reachable (paywalled)</td></tr>
+    <tr><td><a href="#malyala2024">Malyala 2024</a></td><td>Regional reference price (and demand)</td><td>State-wide NEM region (not named in abstract)</td><td>Not stated in abstract</td><td>Not stated in abstract</td><td>Price and aggregate demand only, deliberately no weather</td><td>No</td><td>Not reachable (paywalled)</td></tr>
+    <tr class="best"><td><a href="#sinclair2026">Sinclair 2026</a></td><td>Spot price (RRP)</td><td>NSW1, QLD1, VIC1</td><td>Half-hourly, 2 to 16 h ahead (32 steps)</td><td>Nov 2022 to Aug 2025, 49,447 half-hours, 80:20 split</td><td>48 h of price, demand, interchange, weather, calendar; 16 h of AEMO pre-dispatch and weather forecasts</td><td>Yes: AEMO pre-dispatch is a row in every table</td><td><a class="t" href="#c-nmape">nMAPE</a> 33.6 to 39.2 % (NSW) vs 65.6 to 116 % for AEMO</td></tr>
+  </tbody>
+</table>
+<div class="note warn">Metrics are not comparable across rows. Tan and Ghimire 2024 report errors on normalised or smoothed series and on short or single-year windows; Sinclair reports a normalised MAPE (mean absolute error divided by the mean price) over a 34-month period that contains the 2024 to 2025 spike seasons. Within each paper, though, the comparison against its own baselines is fair. Part 1 explains each metric.</div>
+
+<h2 id="part1"><span class="part-label">Part 1</span>How a price forecast is set up and judged</h2>
+<p>Before any model, three things decide whether a paper's numbers mean anything: what exactly is being predicted from what, how the data were split, and which error score is reported. All the metrics below are worked on the same six half-hours of a made-up NSW evening so you can check them by hand.</p>
+
+<div class="concept" id="c-nem">
+  <h3>The NEM objects that appear in every paper</h3>
+  <div class="kv">
+    <div>RRP (regional reference price)</div><div>The spot price, in A$/MWh, set every five minutes for each of the five regions (NSW1, QLD1, VIC1, SA1, TAS1) by AEMO's dispatch engine. Most papers average it to half-hours. It is bounded by a market floor (−A$1,000) and a market price cap (A$17,500 in 2024-25), so "spikes" of A$5,000 to A$17,500 are real, settled prices.</div>
+    <div>Pre-dispatch (PD)</div><div>AEMO's own forward projection of price and demand for every half-hour up to the end of the next trading day, re-published every half-hour from the bids generators have submitted. It is what Sinclair benchmarks against and, crucially, feeds into the model as a known-future input. It is not a statistical forecast: it is the dispatch engine run on current bids, so it changes whenever a generator rebids.</div>
+    <div>FCAS</div><div>Frequency control ancillary services: eight side-markets where a battery is paid to stand ready to inject or absorb power within 6 seconds, 60 seconds or 5 minutes (three "raise" and three "lower" contingency services) plus two regulation services. Li 2024 bids into the six contingency ones alongside the spot market.</div>
+    <div>Market notices, LOR</div><div>Free-text bulletins AEMO publishes when something is happening: lack-of-reserve (LOR1, LOR2, LOR3) warnings, constraint changes, directions. They often precede spikes by hours, which is why Liu 2024 mines them with a language model.</div>
+    <div>Interconnector flow</div><div>MW moving between regions. When a line is at its limit the regions' prices separate, which is one cause of single-region spikes.</div>
+  </div>
+</div>
+
+<div class="concept" id="c-setup">
+  <h3>The forecasting problem: lags, horizon, covariates</h3>
+  <p class="one"><b>In one sentence.</b> A forecaster is a function from a window of past values (and anything else known now) to one or more future values; the paper's choice of window, horizon and "anything else" is the whole design.</p>
+  <p><b>Lags</b> are the past values fed in: "6 lags" means the last six values. The <b>look-back window</b> is how far back they go (Sinclair: 96 half-hours = 48 h). The <b>horizon</b> is how far ahead the output reaches (Sinclair: 32 half-hours = 16 h, scored at 2, 4, 8, 12 and 16 h). A <b>covariate</b> is any input other than the target itself, and the vital distinction is between <b>past-only</b> covariates (yesterday's temperature) and <b>known-future</b> covariates (tomorrow's temperature forecast, AEMO's pre-dispatch price), because only the second kind can tell the model about tomorrow directly.</p>
+  <div class="diagram"><div id="d-setup"></div><div class="cap">Time runs left to right. The forecast origin is "now". Everything to the left is available; to the right, only known-future covariates are available. The target row to the right is what gets scored.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    A model made at 16:00 with a 4-step look-back and a 3-step horizon sees prices at 14:00, 14:30, 15:00, 15:30 (lags), the pre-dispatch prices for 16:30, 17:00, 17:30 (known-future covariates), and must output prices for 16:30, 17:00, 17:30. The 17:30 output is "3 steps ahead" or "1.5 h ahead". Sinclair's "8 h horizon" row is the error of the 16th output step only, not the average of the first sixteen.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "Day-ahead" in Tan 2023 means the 48 half-hours of tomorrow forecast from today; "16 h ahead" in Sinclair means a rolling forecast made every half-hour. They are different tasks with different difficulty, so their MAPEs are not comparable.</div>
+</div>
+
+<div class="concept" id="c-split">
+  <h3>Train, validation, test, and walk-forward validation</h3>
+  <p class="one"><b>In one sentence.</b> A model is fitted on the training set, its knobs are chosen on the validation set, and its reported score must come from a test set of later dates it never saw.</p>
+  <p>With time series the split must be chronological. If random rows are held out, the model has seen the half-hour before and after every test point and the score is meaningless. <b>Walk-forward validation</b> (also "rolling origin") goes further: fit on months 1 to 12, validate on month 13; fit on 1 to 13, validate on 14; and so on, then average. It mimics how the model would actually be used and it exposes a model that only works in one season.</p>
+  <div class="diagram"><div id="d-split"></div><div class="cap">Sinclair's 80:20 split of 49,447 half-hours (37,085 train, 2,440 validation, 9,858 test) and, underneath, the five-fold walk-forward scheme used to pick hyperparameters.</div></div>
+  <div class="ex"><div class="exh">Why it matters here</div>
+    Tan 2023 tests on four windows of three days each, about 0.7 % of the data, chosen one per season. Ghimire 2024 tests on the single year 2022. Sinclair tests on the last 20 % of Nov 2022 to Aug 2025, roughly Feb to Aug 2025, which includes a volatile winter. A three-day window can be lucky; a whole test year cannot, but a single year can still be atypical.
+  </div>
+</div>
+
+<div class="concept" id="c-leak">
+  <h3>Look-ahead leakage</h3>
+  <p class="one"><b>In one sentence.</b> Leakage is any way that information from after the forecast origin sneaks into an input, and it produces scores that are too good and impossible to reproduce live.</p>
+  <p>The two ways it happens in these papers: <b>(1)</b> a transform (wavelet, EMD, scaling) is computed over the whole series at once, so the "past" component at time t was calculated using values after t; <b>(2)</b> a covariate is taken from actual observations instead of the forecast that would have existed at the time (using yesterday's actual temperature for yesterday is fine; using tomorrow's actual temperature for tomorrow is leakage).</p>
+  <div class="diagram"><div id="d-leak"></div><div class="cap">A symmetric smoothing filter at time t (the purple window) averages values on both sides of t. Applied to the whole series before splitting, the smoothed "input" at t already contains t+1 and t+2.</div></div>
+  <div class="note warn">Sinclair uses AEMO's <em>forecast</em> weather and <em>pre-dispatch</em> price for the future rows, which are legitimately known at the origin. Ghimire 2024's wavelet pre-processing is the one place on this page where leakage of type (1) is a live question; the abstract does not say whether the transform was applied causally. A 2025 follow-up from a different group makes exactly this criticism of the decomposition-then-forecast pattern.</div>
+</div>
+
+<div class="concept" id="c-errors">
+  <h3>The example series used for every metric below</h3>
+  <p>Six half-hours on an imaginary NSW evening, with a forecast that catches the peak but under-calls it.</p>
+  <div id="t-errors"></div>
+  <p class="small">e = actual − forecast. All later metric boxes use these six rows and are computed by the page.</p>
+</div>
+
+<div class="concept" id="c-mae">
+  <h3>MAE and RMSE</h3>
+  <p class="one"><b>In one sentence.</b> MAE is the typical size of a miss in dollars; RMSE is the same but squares each miss first, so one big spike miss dominates it.</p>
+  <span class="formula">MAE = mean(|e|)</span> <span class="formula">RMSE = sqrt(mean(e²))</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    |e| = <span data-v="m.abse"></span>, mean = <span class="v" data-v="m.mae"></span> A$/MWh. e² = <span data-v="m.sqe"></span>, mean = <span data-v="m.mse"></span>, square root = <span class="v" data-v="m.rmse"></span> A$/MWh. RMSE is <span data-v="m.rmseratio"></span>× MAE here; the ratio is 1 only when every miss is the same size, and grows with how spiky the misses are. Sinclair reports MAE (Table A2); Ghimire 2023 and the review's Tan and Ghimire 2024 rows report both.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> A model with low RMSE is not necessarily "better at spikes". RMSE is dominated by spike misses, so a model that never forecasts a spike but sits close to the mean can still have decent RMSE. To see spike skill you need a split like Sinclair's Table A1 (spike windows vs non-spike windows).</div>
+</div>
+
+<div class="concept" id="c-mape">
+  <h3>MAPE, RMSPE and nMAPE</h3>
+  <p class="one"><b>In one sentence.</b> MAPE divides each miss by that half-hour's actual price before averaging, which makes cheap half-hours count as much as expensive ones and blows up when the price is near zero; nMAPE instead divides the average miss by the average price.</p>
+  <span class="formula">MAPE = 100 · mean(|e| / |y|)</span> <span class="formula">RMSPE = 100 · sqrt(mean((e / y)²))</span> <span class="formula" id="c-nmape">nMAPE = 100 · mean(|e|) / mean(y) = 100 · MAE / ȳ</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    Per-row |e|/y = <span data-v="m.ape"></span>, so MAPE = <span class="v" data-v="m.mape"></span> %. RMSPE = <span class="v" data-v="m.rmspe"></span> %. Mean price ȳ = <span data-v="m.ybar"></span>, so nMAPE = 100 × <span data-v="m.mae"></span> / <span data-v="m.ybar"></span> = <span class="v" data-v="m.nmape"></span> %. Now change one actual to A$1 with a forecast of A$6: MAPE jumps to <span class="v" data-v="m.mape_zero"></span> % because one row contributes 500 %, while nMAPE only moves to <span class="v" data-v="m.nmape_zero"></span> %. NEM prices go negative in the middle of the day, so ordinary MAPE is unusable on raw NEM data, which is why Sinclair defines nMAPE and why Tan and Ghimire report MAPE only after normalising or on selected windows.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> Sinclair's "AEMO 116 % nMAPE at 8 h" does not mean AEMO is off by 116 % of each price. It means AEMO's average absolute miss is 1.16 times the average price, mostly because pre-dispatch occasionally prints a A$15,000 forecast that does not eventuate (see the <a class="t" href="#c-nem">pre-dispatch</a> entry).</div>
+</div>
+
+<div class="concept" id="c-corr">
+  <h3>Correlation r and R²</h3>
+  <p class="one"><b>In one sentence.</b> r measures whether forecast and actual go up and down together, on a −1 to 1 scale, and ignores whether the level or the scale is right; R² is r² when the forecast is unbiased and tells you the fraction of variance explained.</p>
+  <span class="formula">r = Σ(y−ȳ)(ŷ−ŷ̄) / sqrt(Σ(y−ȳ)² · Σ(ŷ−ŷ̄)²)</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    r = <span class="v" data-v="m.r"></span>, R² = <span class="v" data-v="m.r2"></span>. Now halve every forecast (so it is badly wrong in level): r is still <span data-v="m.r_half"></span>, because correlation cannot see scale. That is why Ghimire reports KGE next to r.
+  </div>
+</div>
+
+<div class="concept" id="c-kge">
+  <h3>KGE: Kling-Gupta efficiency</h3>
+  <p class="one"><b>In one sentence.</b> KGE checks three things at once, whether the forecast tracks the actual (correlation r), whether it has the right amount of variability (ratio of standard deviations, α), and whether it has the right average level (ratio of means, β), and reports how far the triple (r, α, β) is from the perfect (1, 1, 1).</p>
+  <span class="formula">α = sd(ŷ) / sd(y)</span> <span class="formula">β = mean(ŷ) / mean(y)</span> <span class="formula">KGE = 1 − sqrt((r − 1)² + (α − 1)² + (β − 1)²)</span>
+  <p>It comes from hydrology, where models that get the average flow right but flatten the floods are a known failure; the same failure happens with price spikes. A value of 1 is perfect; 0 is roughly "as good as forecasting the mean every time"; below about 0.5 is poor. Because α punishes under-dispersion, a forecast that never spikes is penalised even if its MAE is fine.</p>
+  <div class="diagram"><div id="d-kge"></div><div class="cap">KGE as a distance in three dimensions. The example forecast sits at the dot; the perfect score is the origin of the axes at (1, 1, 1).</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    r = <span data-v="m.r"></span>. sd(y) = <span data-v="m.sdy"></span>, sd(ŷ) = <span data-v="m.sdf"></span>, so α = <span class="v" data-v="m.alpha"></span> (the forecast is <span data-v="m.alphapct"></span> % as variable as reality, because it under-called the spike). mean(y) = <span data-v="m.ybar"></span>, mean(ŷ) = <span data-v="m.fbar"></span>, so β = <span class="v" data-v="m.beta"></span>. Distance = sqrt((<span data-v="m.r"></span> − 1)² + (<span data-v="m.alpha"></span> − 1)² + (<span data-v="m.beta"></span> − 1)²) = <span data-v="m.kgedist"></span>, so KGE = <span class="v" data-v="m.kge"></span>. Ghimire 2024's 0.972 for the whole of 2022 means all three components were within a few percent of perfect on that year.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> KGE and r can disagree sharply. A forecast equal to 0.5 × actual has r = 1 but α = 0.5 and β = 0.5, giving KGE = 1 − sqrt(0 + 0.25 + 0.25) = 0.29.</div>
+</div>
+
+<div class="concept" id="c-gpi">
+  <h3>GPI: global performance indicator, and the other agreement indices</h3>
+  <p class="one"><b>In one sentence.</b> GPI is a home-made composite: take several metrics, rescale each to 0 to 1 across the models being compared, flip the ones where lower is better, and add them up, so it ranks models within one paper and means nothing outside it.</p>
+  <p>The Ghimire papers also report Willmott's index (WI, 0 to 1, a normalised squared-error score), the Nash-Sutcliffe efficiency (NSE, 1 minus squared error over variance, so 0 means "no better than the mean"), the Legates-McCabe index (same idea with absolute errors, stricter), Theil's U (RMSE relative to the size of the series), and a "promoting percentage" (percent improvement over each baseline). They all move together; the paper's own summary is that TNET was first on all of them at three of four sites.</p>
+  <div class="ex"><div class="exh">Worked example of a GPI-style composite</div>
+    Three models with (MAE, r): A (10, 0.90), B (14, 0.95), C (12, 0.80). Rescale MAE to "lower is better" on 0 to 1: A 1.0, B 0.0, C 0.5. Rescale r: A 0.67, B 1.0, C 0.0. Sum: A 1.67, B 1.0, C 0.5. A wins, but only relative to B and C; add a fourth model and every number changes. That is why the GPI values on Ghimire 2024's card (1.61, 1.33, 1.85, 1.30, 0.78) cannot be compared to anything else.
+  </div>
+</div>
+
+<div class="concept" id="c-dm">
+  <h3>The Diebold-Mariano test</h3>
+  <p class="one"><b>In one sentence.</b> It asks whether the difference in error between two forecasts is bigger than the noise in that difference, using the fact that errors on consecutive half-hours are correlated.</p>
+  <ol class="steps">
+    <li>For each test half-hour t, compute the loss of each forecast, usually |e|, and their difference d<sub>t</sub> = |e<sub>A,t</sub>| − |e<sub>B,t</sub>|.</li>
+    <li>Take the mean d̄. If A is better, d̄ is negative.</li>
+    <li>Estimate the standard error of d̄ allowing for autocorrelation (a Newey-West style variance).</li>
+    <li>DM = d̄ / standard error. Beyond ±1.96 is significant at 5 %; beyond ±2.58 at 1 %.</li>
+  </ol>
+  <div class="ex"><div class="exh">Worked example</div>
+    Two forecasts on eight half-hours with absolute errors A = <span data-v="dm.a"></span> and B = <span data-v="dm.b"></span>. d = <span data-v="dm.d"></span>, d̄ = <span class="v" data-v="dm.mean"></span>, sd(d) = <span data-v="dm.sd"></span>, standard error (ignoring autocorrelation for eight points) = <span data-v="dm.se"></span>, DM = <span class="v" data-v="dm.stat"></span>. That is not significant with eight points. Sinclair's DM statistics against AEMO are −4.0 to −7.1 on 9,858 test half-hours, with p-values around 10<sup>−5</sup> to 10<sup>−12</sup>: every model, even PatchTST, is significantly better than pre-dispatch.
+  </div>
+</div>
+
+<h2 id="part2"><span class="part-label">Part 2</span>Building blocks: the networks, the trees, and the pre-processing tricks</h2>
+<p>Every model in the papers is assembled from the pieces below. The pieces are grouped as: how a network is trained at all; the three classic shapes (dense, convolutional, recurrent); the odd ones (autoencoders, random-weight networks); the non-neural baselines; the hyperparameter search; and the "decompose first" pre-processing family.</p>
+
+<div class="concept" id="c-nn">
+  <h3>A neuron, a layer, a dense network (MLP, DNN, BPNN)</h3>
+  <p class="one"><b>In one sentence.</b> A neuron multiplies each input by a weight, adds them up with a bias, and passes the sum through a simple bend (an activation function); a layer is many neurons on the same inputs; a dense network stacks layers so bends compose into any curve.</p>
+  <div class="diagram"><div id="d-neuron"></div><div class="cap">Left: one neuron. Right: three inputs, a hidden layer of four, one output. "MLP", "DNN" and "BPNN" (back-propagation neural network) all mean this shape; DNN usually implies more than two hidden layers.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Inputs: price now 120, pre-dispatch for next half-hour 150 (both divided by 100 to scale). Weights 0.3 and 0.8, bias −0.2. Sum = 0.3×1.2 + 0.8×1.5 − 0.2 = <span class="v" data-v="nn.sum"></span>. ReLU activation (negative becomes 0, positive passes) gives <span class="v" data-v="nn.relu"></span>; tanh would give <span data-v="nn.tanh"></span>; sigmoid <span data-v="nn.sig"></span>. Multiply by an output weight of 100 and the neuron says A$<span data-v="nn.out"></span>. Learning is nothing more than nudging 0.3, 0.8 and −0.2 until such outputs match history.
+  </div>
+</div>
+
+<div class="concept" id="c-train">
+  <h3>Training: loss, gradient descent, epochs, learning rate, Adam</h3>
+  <p class="one"><b>In one sentence.</b> Training measures how wrong the network is with a loss function, computes which direction each weight should move to reduce it (the gradient, by back-propagation), and takes a small step that way, over and over.</p>
+  <p>One pass through the training set is an <b>epoch</b>; Sinclair trains for up to 20. The <b>learning rate</b> is the step size (2 × 10<sup>−4</sup> in Sinclair): too big and training bounces, too small and it crawls. <b>Adam</b> is the standard optimiser; it keeps a running average of past gradients so each weight gets its own adaptive step. <b>Batch size</b> (128 in Sinclair) is how many samples are averaged per step. <b>Reduce-on-plateau</b> halves the learning rate when validation loss stops improving; <b>early stopping</b> ends training when it has not improved for several epochs (patience 5 in Sinclair) to avoid <a class="t" href="#c-reg">overfitting</a>.</p>
+  <div class="diagram"><div id="d-gd"></div><div class="cap">Loss as a landscape over one weight. Each step moves downhill by learning-rate × slope. Adam scales the step per weight.</div></div>
+</div>
+
+<div class="concept" id="c-loss">
+  <h3>Loss functions: MSE, MAE, Huber, and quantile (pinball)</h3>
+  <p class="one"><b>In one sentence.</b> The loss decides what "wrong" costs; squared error makes the model chase spikes hard, absolute error makes it aim for the median and ignore them, Huber is squared near zero and absolute far away, and quantile loss tilts the penalty so the model learns a specific percentile.</p>
+  <div class="diagram"><div id="d-loss"></div><div class="cap">Loss against the size of the miss. Huber (δ = 0.8 in Sinclair, on scaled data) follows MSE inside ±δ and MAE outside, so a A$10,000 spike miss does not dominate training the way it would under MSE.</div></div>
+  <div class="ex" id="c-quantile"><div class="exh">Worked example: quantile (pinball) loss, used by the Temporal Fusion Transformer</div>
+    For quantile q, loss = q × (y − ŷ) if the forecast is below the actual, else (1 − q) × (ŷ − y). With q = 0.9, actual 100: a forecast of 80 costs 0.9 × 20 = <span class="v" data-v="pin.low"></span>; a forecast of 120 costs 0.1 × 20 = <span class="v" data-v="pin.high"></span>. Under-forecasting is nine times dearer, so the model learns to sit above the actual 90 % of the time: that output is the 90th percentile. Training three such heads (q = 0.1, 0.5, 0.9) gives a band, which is how TFT produces its interval.
+  </div>
+</div>
+
+<div class="concept" id="c-reg">
+  <h3>Overfitting and the standard defences: dropout, layer normalisation, residual connections</h3>
+  <p class="one"><b>In one sentence.</b> Overfitting is memorising the training set's noise; dropout randomly switches neurons off during training so no single path can be relied on, layer normalisation rescales each sample's activations so training is stable, and a residual connection adds a layer's input straight to its output so the layer only has to learn a correction.</p>
+  <div class="diagram"><div id="d-reg"></div><div class="cap">Left: dropout knocks out a random 5 % (Sinclair) to 30 % of units each step. Middle: LayerNorm subtracts the mean and divides by the standard deviation across a sample's features. Right: the residual "skip" wire around a block; "pre-LN" (Sinclair's Figure 3) normalises before the block instead of after, which trains more stably in deep stacks.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> Layer normalisation normalises across the features of one sample. Batch normalisation normalises each feature across the samples in a batch. Transformers use the first because sequences in a batch have different lengths and statistics.</div>
+</div>
+
+<div class="concept" id="c-scaling">
+  <h3>Scaling inputs: standard, robust, quantile, and RevIN</h3>
+  <p class="one"><b>In one sentence.</b> Networks train badly on raw dollars, so every input is rescaled to a similar range; the choice matters for a series with a A$−1,000 to A$17,500 range and a median around A$100.</p>
+  <p><b>Standard</b> scaling subtracts the mean and divides by the standard deviation; one spike inflates the standard deviation and squashes all the ordinary prices into a narrow band. <b>Robust</b> scaling uses the median and inter-quartile range instead. <b>Quantile transformer</b> scaling (Sinclair's choice) maps every value to its rank on a 0 to 1 scale and then to a normal distribution, so A$100 and A$10,000 land at their percentiles and the spike stops dominating. <b>RevIN</b> (reversible instance normalisation, used inside PatchTST) normalises each input window by its own mean and standard deviation and un-does it on the output, so the model sees "shape" not "level".</p>
+  <div class="ex"><div class="exh">Worked example: RevIN on the six-row series</div>
+    Window mean = <span data-v="m.ybar"></span>, sd = <span data-v="m.sdy"></span>. Normalised values = <span data-v="rv.z"></span>. The model forecasts in this unit-free space; if it outputs 0.5 for the next step, RevIN returns 0.5 × <span data-v="m.sdy"></span> + <span data-v="m.ybar"></span> = A$<span class="v" data-v="rv.back"></span>. Notice the problem for spikes: a window that contains no spike has a small sd, so a model that has only ever seen z-scores of ±2 can never output the +8 that a spike would need. Sinclair mentions this as a reason PatchTST struggled.
+  </div>
+</div>
+
+<div class="concept" id="c-cnn">
+  <h3>1-D convolutional network (CNN)</h3>
+  <p class="one"><b>In one sentence.</b> A small window of weights (a kernel or filter) slides along the series and at each position outputs the weighted sum of the values under it, so the same pattern detector is applied everywhere; many filters run in parallel, and stacking layers detects patterns of patterns.</p>
+  <p>Terms you will meet: <b>kernel size</b> (how many time steps a filter spans), <b>stride</b> (how far it jumps each move), <b>padding</b> (zeros added at the ends so the output is the same length), <b>channels</b> (number of filters, or number of input series), <b>pooling</b> (take the max or mean over small blocks to shorten the series and keep the strongest response), <b>Conv1D</b> (Keras's name for this layer). A <b>TCN</b> (temporal convolutional network) is a stack of causal, dilated 1-D convolutions that only look backwards; the companion page walks one through numerically.</p>
+  <div class="diagram"><div id="d-cnn"></div><div class="cap">The kernel (−1, 0, +1) slid along eight half-hourly prices. Each output is "price two steps later minus price two steps earlier": a ramp detector. ReLU then keeps only the up-ramps.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Prices x = <span data-v="cnn.x"></span>. Kernel (−1, 0, +1), stride 1, no padding: outputs = <span data-v="cnn.y"></span> (six values from eight, because the window needs a neighbour on each side). After ReLU: <span data-v="cnn.relu"></span>. Max-pool with block 2: <span class="v" data-v="cnn.pool"></span>. A second filter, say (1, −2, 1), would detect V-shapes and peaks. Training learns the kernel values; the human only chooses the sizes. In Tan 2023 and Ghimire 2024 the CNN's outputs are not the forecast; they are handed to another model (an autoencoder, an RVFL) that does the regression.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> A CNN has no memory; each output depends only on the values under the kernel. Its reach grows only by stacking layers or dilating the kernel. That is why CNNs are usually paired with an LSTM (CNN-LSTM) when long context matters.</div>
+</div>
+
+<div class="concept" id="c-rnn">
+  <h3>Recurrent networks: RNN, LSTM, GRU, BiLSTM</h3>
+  <p class="one"><b>In one sentence.</b> A recurrent network reads the series one step at a time and carries a vector of memory forward, updating it at each step with the new value; an LSTM adds gates that learn what to keep, what to forget and what to output, and a GRU is a lighter version with two gates.</p>
+  <p>The basic RNN update is h<sub>t</sub> = tanh(W·x<sub>t</sub> + U·h<sub>t−1</sub> + b): the new memory is a bend of "this input plus the old memory". Its weakness is that the same U is multiplied in at every step, so signals from 50 steps back either vanish or explode. The <b>LSTM</b> fixes this with a separate cell state c<sub>t</sub> that is edited additively: a <b>forget gate</b> f (0 to 1) scales the old cell, an <b>input gate</b> i scales a proposed new value c̃, and an <b>output gate</b> o decides how much of the cell is exposed as h<sub>t</sub>. The <b>GRU</b> merges cell and hidden state and uses a reset gate and an update gate. A <b>bidirectional</b> LSTM runs a second copy from the end of the window backwards and concatenates the two memories, which is only legitimate when the whole window is in the past.</p>
+  <div class="diagram"><div id="d-lstm"></div><div class="cap">One LSTM cell. Solid line: the cell state c, edited by multiply-by-f then add i × c̃. Dashed: the hidden state h that is also the output.</div></div>
+  <div class="ex"><div class="exh">Worked example, one step with scalar states</div>
+    Old cell c = 0.60. The gates, after their sigmoids, come out as f = 0.90, i = 0.50, o = 0.70, and the candidate c̃ = 0.80. New cell c = f × 0.60 + i × 0.80 = <span data-v="lstm.c1"></span> + <span data-v="lstm.c2"></span> = <span class="v" data-v="lstm.c"></span>. Output h = o × tanh(c) = 0.70 × <span data-v="lstm.tanhc"></span> = <span class="v" data-v="lstm.h"></span>. If instead the forget gate had learned f = 0.1 (a spike just happened, forget the calm regime), the cell would drop to <span data-v="lstm.calt"></span>. For a full multi-step walk-through with real weight matrices, see the <a href="rnn_explainer.html">companion page</a>.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "LSTM" in Sinclair's tables is a two-layer LSTM that <em>does</em> receive the future covariates (pre-dispatch etc.) as inputs for the decoder steps. It is not a naive "history only" model, which is why it lands within 5 points of the transformers.</div>
+</div>
+
+<div class="concept" id="c-ae">
+  <h3>Autoencoders: plain, denoising, sparse, stacked (SDAE, SSDAE)</h3>
+  <p class="one"><b>In one sentence.</b> An autoencoder is trained to output its own input through a narrower middle layer, so the middle layer is forced to become a compressed summary; variants change what goes in (noise added) or what the middle is allowed to do (mostly off).</p>
+  <ol class="steps">
+    <li><b>Plain.</b> Encoder squeezes 48 half-hours to, say, 8 numbers; decoder expands back to 48; loss is reconstruction error. The 8 numbers are features.</li>
+    <li><b>Denoising (DAE).</b> Random noise (or random zeros) is added to the input, the target is still the clean input. The network can only succeed by learning the structure that survives noise, so its features ignore bid-by-bid jitter.</li>
+    <li><b>Sparse.</b> A penalty keeps the average activation of each middle neuron near a small value like 0.05, so on any given input most are off and each active one stands for something specific.</li>
+    <li><b>Stacked (SDAE, SSDAE).</b> Train one, freeze it, train a second on the first's middle layer, and so on; then put a regression layer on top and fine-tune the whole stack. Faster and more stable than training a deep network from scratch, which was the point in 2023.</li>
+  </ol>
+  <div class="diagram"><div id="d-ae"></div><div class="cap">Noisy in, clean out, through a bottleneck. Grey bottleneck units are the ones the sparsity penalty has switched off for this input.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Input: the 6-row series with noise added, <span data-v="ae.noisy"></span>. Target: the clean series <span data-v="ae.clean"></span>. A 6→2→6 autoencoder cannot store six numbers in two, so it learns something like (level, peak-height) and reconstructs a smoothed evening shape; the noise is what it drops. In Tan 2023 the CNN's feature maps go through a stacked sparse denoising autoencoder and the top layer regresses tomorrow's price from the compressed features.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "Encoder" in "autoencoder" and "encoder" in "transformer encoder" are different things. The first compresses to a bottleneck; the second is a stack of attention layers that keeps the sequence length.</div>
+</div>
+
+<div class="concept" id="c-trees">
+  <h3>The non-neural baselines: random forest, XGBoost, SVM, ELM</h3>
+  <p class="one"><b>In one sentence.</b> These are the "conventional machine learning" rows in the tables: decision-tree ensembles that split on thresholds, a kernel regression that fits a tube, and a random-feature network.</p>
+  <div class="diagram"><div id="d-tree"></div><div class="cap">One regression tree on two features. A random forest averages hundreds of such trees, each grown on a random subset of rows and features. XGBoost grows them one at a time, each fitted to the errors the previous ones left.</div></div>
+  <ul>
+    <li><b>Random forest (RF).</b> Many trees, each on a bootstrap sample; prediction is the average. Robust, no scaling needed, cannot extrapolate above the largest training price.</li>
+    <li><b>XGBoost (XGB).</b> Gradient boosting: tree 1 fits the target, tree 2 fits tree 1's residuals, and so on, with regularisation. Usually the strongest tabular baseline; same extrapolation limit.</li>
+    <li><b>Support vector machine / regression (SVM).</b> Fits the flattest function that keeps most points inside a tube of width ε, using a kernel to allow curves. Scales badly beyond tens of thousands of rows.</li>
+    <li><b>Extreme learning machine (ELM).</b> A one-hidden-layer network whose hidden weights are random and fixed; only the output weights are fitted by least squares. The RVFL below is an ELM with an added direct input-to-output link.</li>
+  </ul>
+</div>
+
+<div class="concept" id="c-rvfl">
+  <h3>Random vector functional link network (RVFL)</h3>
+  <p class="one"><b>In one sentence.</b> Take the inputs, push them through a hidden layer whose weights were drawn at random and are never changed, then fit a single linear regression from [inputs, hidden outputs] to the target by least squares; the randomness supplies nonlinearity for free and the least-squares fit takes milliseconds.</p>
+  <p>"Functional link" is the direct wire from the inputs to the output, so the model is "ordinary linear regression plus random nonlinear extra features". Least squares means solving for the output weights β that minimise Σ(y − Hβ)², which has the closed-form answer β = (HᵀH + λI)<sup>−1</sup>Hᵀy (λ is a small ridge penalty). No gradient descent, no epochs, no learning rate. In Ghimire 2024 the inputs to the RVFL are the CNN's features, so the "C" in CRVFL is the CNN and the RVFL is the regression head.</p>
+  <div class="diagram"><div id="d-rvfl"></div><div class="cap">Blue: the direct link. Grey dashed: random, fixed hidden weights. Purple: the only weights that are learned, in one least-squares solve.</div></div>
+  <div class="ex"><div class="exh">Worked example, fully computed</div>
+    Eight training rows: input x = price now ÷ 100, target y = price next half-hour ÷ 100.
+    <div id="t-rvfl"></div>
+    Two random hidden units with fixed weights (w, b) = (<span data-v="rvfl.w1"></span>, <span data-v="rvfl.b1"></span>) and (<span data-v="rvfl.w2"></span>, <span data-v="rvfl.b2"></span>), activation tanh. Each row's feature vector is [1, x, tanh(w₁x + b₁), tanh(w₂x + b₂)] (the 1 is the bias, x is the direct link). Solving least squares (with a small ridge penalty λ = 0.01 to keep the weights tame) gives output weights β = <span class="v" data-v="rvfl.beta"></span> for [bias, direct link, hidden 1, hidden 2]. Fitted values are in the last column; training MAE = <span data-v="rvfl.mae"></span> (×100 = A$<span data-v="rvfl.mae100"></span>/MWh). A different random draw of (w, b) gives a different fit, which is why the quality depends on how many hidden units you use and why Ghimire wraps the whole thing in Bayesian optimisation.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> Because the hidden weights are random, an RVFL is not "learning features"; it is a fast, well-behaved curve fitter. All the feature learning in MoDWT-CRVFL happens in the CNN before it.</div>
+</div>
+
+<div class="concept" id="c-bo">
+  <h3>Hyperparameter search: grid, random, and Bayesian optimisation</h3>
+  <p class="one"><b>In one sentence.</b> Hyperparameters are the settings you choose rather than train (lags, layers, learning rate, wavelet level); Bayesian optimisation picks the next setting to try by fitting a probabilistic curve to the trials so far and going where the predicted score is high or the uncertainty is wide.</p>
+  <p><b>Grid search</b> tries every combination (3 lags × 4 levels × 5 filter counts = 60 trainings). <b>Random search</b> samples combinations at random and is surprisingly competitive because usually only one or two settings matter. <b>Bayesian optimisation</b> keeps a surrogate model, almost always a Gaussian process, which gives a mean and a standard deviation for the score at every untried setting, and an <b>acquisition function</b> such as expected improvement that trades off exploiting good regions against exploring uncertain ones. Typically 20 to 50 trials replace hundreds.</p>
+  <div class="diagram"><div id="d-bo"></div><div class="cap">One hyperparameter, six trials done (dots). The purple line is the surrogate's guess, the band its uncertainty. The next trial goes where the upper edge of the band is highest.</div></div>
+  <div class="ex"><div class="exh">Where it appears</div>
+    Ghimire 2024 uses it to choose the MoDWT level, the number of lags, and the CNN and RVFL sizes ("Bayesian-optimised"). Sinclair uses a plainer sweep with walk-forward validation (Table 3 lists the ranges: dropout 0 to 0.3, learning rate 10<sup>−6</sup> to 10<sup>−3</sup>, input length 4 to 192).
+  </div>
+</div>
+
+<div class="concept" id="c-emd">
+  <h3>Empirical mode decomposition: EMD, EEMD, CEEMDAN, ICEEMDAN</h3>
+  <p class="one"><b>In one sentence.</b> EMD peels a series into a handful of oscillations from fastest to slowest (intrinsic mode functions, IMFs) plus a slow residual, using only the series' own peaks and troughs; the "ensemble" and "adaptive noise" variants fix its habit of mixing frequencies by averaging over many noisy copies.</p>
+  <ol class="steps">
+    <li>Find all local maxima and all local minima of the series.</li>
+    <li>Draw a smooth curve (a cubic spline) through the maxima, another through the minima: the upper and lower envelopes.</li>
+    <li>Subtract the average of the two envelopes from the series. Repeat ("sift") on the result until what is left oscillates around zero with one peak per zero-crossing. That is IMF1, the fastest component.</li>
+    <li>Subtract IMF1 from the original and repeat from step 1 to get IMF2, and so on, until the residual has no more oscillations.</li>
+  </ol>
+  <p><b>Mode mixing</b>: plain EMD often puts two different frequencies in one IMF or the same frequency across two. <b>EEMD</b> adds white noise to the series, runs EMD, repeats a few hundred times with different noise and averages the IMFs; the noise fills in the gaps so components separate cleanly. <b>CEEMDAN</b> adds the noise stage by stage so the IMFs sum back exactly to the series; <b>ICEEMDAN</b> ("improved") adds noise as the EMD of noise rather than raw noise, which removes spurious early modes and leaves less noise in the result. Then each IMF is forecast separately and the forecasts are summed.</p>
+  <div class="diagram"><div id="d-emd"></div><div class="cap">Illustrative (a synthetic series, not real sifting): an evening price shape decomposes into bid noise, a daily cycle, and a trend. The slow parts are easy to forecast; the error concentrates in IMF1.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> EMD is not a fixed filter; the components depend on the whole series, so an IMF at time t computed on the full dataset has seen the future (see <a class="t" href="#c-leak">leakage</a>). A causal use must recompute the decomposition on the history available at each origin, which is expensive and is why the review of Tan's paper notes the three-day test windows.</div>
+</div>
+
+<div class="concept" id="c-wavelet">
+  <h3>Wavelet transforms: DWT and MoDWT, levels, approximation and detail</h3>
+  <p class="one"><b>In one sentence.</b> A wavelet transform splits a series into a smooth "approximation" and a set of "detail" series, one per scale, using fixed short filters; the ordinary DWT halves the length at each level, while the maximal-overlap DWT (MoDWT) applies the same filters at every time step so every level stays full length and lined up with the original.</p>
+  <p>The simplest wavelet, Haar, uses the filters "average of two neighbours" (low-pass, gives the approximation A) and "half their difference" (high-pass, gives the detail D). <b>Level 1</b> applies them to the series; <b>level 2</b> applies them again to A1; each level doubles the time scale it captures. The <b>number of levels</b> is a hyperparameter (Ghimire chose it by Bayesian optimisation). Longer wavelets (Daubechies db4, symlets) use 4 to 8 coefficients instead of 2 and give smoother components. In the MoDWT the filters are applied at every t instead of every second t, so no information is thrown away and the components can be fed as ordinary aligned input columns.</p>
+  <div class="diagram"><div id="d-wavelet"></div><div class="cap">Haar decomposition of eight half-hourly prices containing one spike. The spike lands almost entirely in the detail series; the approximation is the underlying shape.</div></div>
+  <div class="ex"><div class="exh">Worked example, by hand</div>
+    x = <span data-v="hw.x"></span>.<br>
+    <b>DWT level 1</b> (pairs, halved length): A1 = averages of pairs = <span class="v" data-v="hw.a1"></span>; D1 = half-differences = <span class="v" data-v="hw.d1"></span>. The 300 spike shows up as the 110 in D1.<br>
+    <b>DWT level 2</b> on A1: A2 = <span class="v" data-v="hw.a2"></span>; D2 = <span class="v" data-v="hw.d2"></span>.<br>
+    <b>MoDWT level 1</b> (every position, full length; the first value wraps around to the end): A1 = <span class="v" data-v="hw.ma1"></span>; D1 = <span class="v" data-v="hw.md1"></span>. Eight inputs became sixteen aligned inputs, and the spike is visible in D1 at its own time step and the next.<br>
+    Check: at every step A1 + D1 or A1 − D1 recovers the original pair, so nothing was lost.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> The MoDWT of the whole test year, computed once, uses the value at t+1 to compute the detail at t for many wavelets (the filter is symmetric or the boundary wraps). That is <a class="t" href="#c-leak">leakage</a> unless the transform is re-run at each origin on past data only. Neither the Ghimire 2024 abstract nor the review says which was done.</div>
+</div>
+
+<div class="concept" id="c-ssa">
+  <h3>Other decompositions that appear as baselines: SSA, VMD, wavelet-vs-EMD</h3>
+  <p><b>Singular spectrum analysis (SSA)</b> stacks lagged copies of the series into a matrix, takes its singular value decomposition, and rebuilds the series from the top few components: trend, oscillations, noise. <b>Variational mode decomposition (VMD)</b> solves an optimisation for a fixed number K of band-limited modes with centre frequencies; it is less prone to mode mixing than EMD but you must choose K. Tan 2023 tried wavelet (WT), SSA and EEMD in front of the same CNN+SSDAE and found ICEEMDAN best; the review's table shows wavelet actually made that model worse than no decomposition.</p>
+</div>
+
+<div class="concept" id="c-hybrid">
+  <h3>The "decompose, forecast each part, add up" pattern</h3>
+  <p class="one"><b>In one sentence.</b> Split the series into components that are individually smoother than the whole, forecast each with its own model, and sum the forecasts; it works because the summed error is usually less than the error of forecasting the raw series, and it fails when the decomposition itself needs the future.</p>
+  <div class="diagram"><div id="d-hybrid"></div><div class="cap">The template behind Tan 2023 (ICEEMDAN in front, CNN+SSDAE per component), Ghimire 2024 (MoDWT in front, one CNN-RVFL on all components), and a dozen NEM papers not on this page.</div></div>
+  <div class="ex"><div class="exh">Reading the results tables with this in mind</div>
+    In Tan's table the raw-price CNN+SSDAE has MAPE 8.4 to 9.7 % and the ICEEMDAN version 6.0 to 7.0 %, so the decomposition is worth about 2.5 points. In Ghimire 2024 the wavelet front end lifts every predictor from KGE 0.66 to 0.74 up to 0.90 to 0.97, which is a much larger jump, and the size of that jump is itself a reason to ask whether the components were computed causally.
+  </div>
+</div>
+
+<h2 id="part3"><span class="part-label">Part 3</span>Attention and the transformer family</h2>
+<p>A recurrent network reaches the past through a chain of memory updates. Attention reaches it directly: every output position computes a weight for every input position and takes the weighted average. Everything in this part is a variation on that one operation.</p>
+
+<div class="concept" id="c-softmax">
+  <h3>Softmax: turning scores into weights that sum to 1</h3>
+  <p class="one"><b>In one sentence.</b> Softmax exponentiates each score and divides by the total, so bigger scores get disproportionately bigger shares and the shares add to exactly 1.</p>
+  <span class="formula">softmax(s)<sub>i</sub> = exp(s<sub>i</sub>) / Σ<sub>j</sub> exp(s<sub>j</sub>)</span>
+  <div class="ex"><div class="exh">Worked example</div>
+    Scores (2.0, 1.0, 0.1): exponentials <span data-v="sm.exp"></span>, total <span data-v="sm.sum"></span>, weights <span class="v" data-v="sm.w"></span>. The top score gets two-thirds of the weight, not half. Multiply all scores by 3 and the weights become <span data-v="sm.w3"></span>: sharper. That is why attention divides scores by √d (the vector length): to keep them from getting so large that the softmax becomes a hard argmax with no gradient.
+  </div>
+</div>
+
+<div class="concept" id="c-attn">
+  <h3>Attention: queries, keys, values, and heads</h3>
+  <p class="one"><b>In one sentence.</b> Each position produces three vectors from its input, a query (what am I looking for), a key (what do I contain) and a value (what I hand over); an output position scores every input by query·key, softmaxes the scores into weights, and outputs the weighted sum of the values.</p>
+  <span class="formula">Attention(Q, K, V) = softmax(Q Kᵀ / √d) V</span>
+  <p><b>Self-attention</b>: queries, keys and values all come from the same sequence (the past looks at the past). <b>Cross-attention</b>: queries come from one sequence (the future steps) and keys/values from another (the encoded past). <b>Multi-head</b>: run h copies with different learned projections and concatenate; each head can specialise (one on "same time yesterday", one on "last two hours"). <b>Causal mask</b>: in decoder self-attention, position t is forbidden from attending to positions after t, so an autoregressive model cannot peek ahead.</p>
+  <div class="diagram"><div id="d-attn"></div><div class="cap">One query (the 18:00 forecast step) scoring three past half-hours. The bars are the softmaxed weights; the output is the weighted sum of the values.</div></div>
+  <div class="ex"><div class="exh">Worked example, fully computed with 2-dimensional vectors</div>
+    Query q = <span data-v="at.q"></span>. Keys: k₁ = <span data-v="at.k1"></span> (17:30 yesterday, high price), k₂ = <span data-v="at.k2"></span> (last half-hour), k₃ = <span data-v="at.k3"></span> (3 am, low). Values are the scaled prices at those times, v = <span data-v="at.v"></span>.<br>
+    Scores q·k / √2 = <span data-v="at.s"></span>. Softmax → weights <span class="v" data-v="at.w"></span>. Output = Σ w v = <span class="v" data-v="at.out"></span> (× 100 = A$<span data-v="at.out100"></span>). The 3 am price got almost no say because its key did not match the query. Training learns the projections that make queries and keys line up usefully; nothing about "17:30 yesterday matters" is hard-coded.
+  </div>
+  <div class="diagram"><div id="d-attnmap"></div><div class="cap">What a whole attention matrix looks like for four future steps attending over six past half-hours and four pre-dispatch rows. In Sinclair's SHAP analysis the pre-dispatch columns carry most of the weight; this map is drawn to show that pattern.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> Attention weights are not feature importance. They say which positions were averaged, not which inputs changed the answer; that is what <a class="t" href="#c-shap">SHAP</a> is for.</div>
+</div>
+
+<div class="concept" id="c-pos">
+  <h3>Positional encoding and Time2Vec</h3>
+  <p class="one"><b>In one sentence.</b> Attention treats its inputs as a bag with no order, so each position gets a vector added to it that encodes where (or when) it is; the classic recipe is a set of sines and cosines at different frequencies, and Time2Vec is the same idea with the frequencies learned.</p>
+  <p>The sinusoidal encoding for position p uses sin(p / 10000<sup>2i/d</sup>) and cos(...) for i = 0 … d/2, so low dimensions oscillate fast (distinguish neighbours) and high dimensions slowly (distinguish far apart). Sinclair adds this to both encoder and decoder inputs and additionally feeds explicit calendar features (sine and cosine of half-hour-of-day, day-of-week, month) so the model knows the time of day directly, not just the position in the window. <b>Time2Vec</b> (Ghimire 2023) replaces the fixed table with one linear term plus k learned sinusoids, t2v(τ) = [ω₀τ + φ₀, sin(ω₁τ + φ₁), …], so the network can discover a daily and a weekly frequency itself.</p>
+  <div class="diagram"><div id="d-pos"></div><div class="cap">Three of the sinusoidal channels over 48 positions, and the daily sine/cosine pair that Sinclair uses so that 23:30 and 00:00 are near each other.</div></div>
+</div>
+
+<div class="concept" id="c-tlayer">
+  <h3>One transformer layer, and a stack of them</h3>
+  <p class="one"><b>In one sentence.</b> A layer is multi-head attention, then a small two-layer feed-forward network applied to each position separately, each wrapped in a residual connection and a layer normalisation; a transformer is N of these in a row.</p>
+  <p>The sizes you see in Sinclair's Table 2: <b>d_model</b> = 128 is the width of every position's vector; <b>heads</b> = 4 means four 32-wide attention heads; <b>ff_dim</b> = 512 is the hidden width of the per-position feed-forward network; <b>layers</b> = 3 is the stack depth; <b>dropout</b> = 0.05. "Tiny" to "large" scale these from 64/2/256/2 up to 512/8/2048/4, and the small one won, which the paper attributes to the dataset's size (about 37,000 training windows).</p>
+  <div class="diagram"><div id="d-tlayer"></div><div class="cap">Pre-LayerNorm layout (Sinclair's Figure 3): normalise, attend, add the skip; normalise, feed-forward, add the skip. The feed-forward part is where most of the parameters live.</div></div>
+</div>
+
+<div class="concept" id="c-encdec">
+  <h3>Encoder-decoder, encoder-only, decoder-only; parallel versus autoregressive decoding</h3>
+  <p class="one"><b>In one sentence.</b> The encoder is a transformer over the past; the decoder is a transformer over the future positions that also cross-attends to the encoder's output; you can keep both, only the encoder (then regress the future from a pooled or flattened past), or only the decoder (then the future positions attend only to themselves and their known-future covariates).</p>
+  <div class="diagram"><div id="d-encdec"></div><div class="cap">The three shapes. In decoder-only, the only information about the past is whatever is inside the known-future covariates (for the NEM: AEMO's pre-dispatch, which was itself computed from the current state of the system).</div></div>
+  <p><b>Parallel (non-autoregressive) decoding</b>: the decoder is given all 32 future covariate rows at once and emits all 32 prices in one forward pass. <b>Autoregressive decoding</b>: emit step 1, append it to the decoder input, emit step 2, and so on, 32 passes; during training the true previous values are fed instead of the predicted ones ("teacher forcing"), which is a mismatch with how it runs live and one reason Sinclair's autoregressive variants were 2 to 4 points worse and slower.</p>
+  <div class="ex"><div class="exh">Reading Sinclair's five variants</div>
+    (a) enc-dec parallel, (b) enc-dec autoregressive, (c) encoder-only, (d) decoder-only parallel, (e) decoder-only autoregressive. NSW 2 h nMAPE: 37.9, 40.8, 42.7, <b>33.6</b>, 38.7. The two facts to take away: dropping the encoder (c → d comparison is the wrong one; compare a → d) <em>improved</em> the score, and dropping the future covariates (c) cost 5 to 9 points. History is nearly redundant once you have pre-dispatch.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> "Decoder-only" here is not the GPT sense of "predict the next token from previous tokens". Sinclair's decoder-only model has no autoregression in variant (d); it is a transformer over 32 rows of forecast covariates that outputs 32 prices. The name refers to which half of the original architecture is kept.</div>
+</div>
+
+<div class="concept" id="c-covariates">
+  <h3>Known-future covariates: why the pre-dispatch column decides everything</h3>
+  <p class="one"><b>In one sentence.</b> A covariate that is known for the forecast horizon (a weather forecast, a calendar flag, AEMO's pre-dispatch) can be handed to the decoder row by row, and any model that can accept such rows will beat any model that cannot, whatever its architecture.</p>
+  <div id="t-cov"></div>
+  <p>Sinclair's SHAP result: the pre-dispatch NSW price contributes more than 60 % of total feature importance; forecast demand, interconnector flows and other regions' pre-dispatch prices come next; the 48 hours of history contribute "comparatively little". PatchTST and TimesFM have no way to accept the right-hand columns, and they score 57 to 116 % nMAPE against 34 to 44 % for everything that can.</p>
+</div>
+
+<div class="concept" id="c-tft">
+  <h3>Temporal Fusion Transformer (TFT)</h3>
+  <p class="one"><b>In one sentence.</b> TFT is a forecasting-specific design that learns a weight for every input variable (variable selection), runs an LSTM over past and future rows for local order, applies one interpretable attention layer for long-range structure, gates any block that is not helping, and outputs quantiles.</p>
+  <ol class="steps">
+    <li><b>Variable selection network.</b> For each time step, a softmax over the input variables gives each a weight; the weighted sum is what the rest of the model sees. The weights are a built-in importance report.</li>
+    <li><b>LSTM encoder-decoder.</b> Reads the past rows, then the known-future rows, producing a local context per step.</li>
+    <li><b>Gated residual network (GRN).</b> Every block is wrapped in a learned gate that can pass its input straight through; the model can effectively turn off the attention layer if the LSTM alone suffices.</li>
+    <li><b>Interpretable multi-head attention.</b> One attention layer over the whole window, with the heads' value projections shared so their weights can be averaged and read.</li>
+    <li><b>Quantile outputs.</b> Trained with the <a class="t" href="#c-quantile">pinball loss</a> at q = 0.1, 0.5, 0.9, so it emits a band.</li>
+  </ol>
+  <div class="diagram"><div id="d-tft"></div><div class="cap">TFT's data path. It handles static, past-only and known-future inputs separately, which is why it is the natural comparison model for the NEM problem.</div></div>
+  <div class="ex"><div class="exh">Where it landed</div>
+    TFT was within 1 to 3 points of the best transformer in NSW and QLD and was the best model in VIC (36.3 to 39.6 %). Its 0.5-quantile is what the tables score, so it competes on a point forecast while also giving the band the others lack.
+  </div>
+</div>
+
+<div class="concept" id="c-patchtst">
+  <h3>PatchTST: patches and channel independence</h3>
+  <p class="one"><b>In one sentence.</b> Cut the input window into overlapping patches of P steps with stride S, treat each patch as one token, run an encoder-only transformer over the tokens, and do this separately for each input series; a linear layer maps the encoded tokens to the horizon.</p>
+  <div class="diagram"><div id="d-patch"></div><div class="cap">Patching. Attention runs over 13 patch-tokens instead of 96 step-tokens, so it is cheaper and each token carries a local shape.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    Sinclair's settings: window 96, patch 24, stride 6 → number of patches = (96 − 24) / 6 + 1 = <span class="v" data-v="pt.n"></span>. Each patch is linearly projected to d_model and given a positional encoding. <b>Channel independence</b> means the price, demand and temperature series each go through the same transformer separately and are only combined at the end, which makes the model robust but blind to interactions. Combined with <a class="t" href="#c-scaling">RevIN</a> and the inability to take future covariates, this is why PatchTST sat at 59 to 108 % nMAPE.
+  </div>
+</div>
+
+<div class="concept" id="c-informer">
+  <h3>Informer, ProbSparse attention, and the "Graph Patch Informer"</h3>
+  <p class="one"><b>In one sentence.</b> Informer is a long-horizon encoder-decoder transformer that makes attention cheap by only computing the full weight row for the few queries whose attention would be most peaked (ProbSparse), and shrinks the sequence between encoder layers (distilling); Malyala's GPI adds patching in front and a graph layer over the patches.</p>
+  <p>The sparsity trick: for each query, measure how far its score distribution is from uniform (a cheap approximation of KL divergence using a sample of keys). Queries that would attend almost uniformly contribute nothing useful, so give them the mean of the values instead of computing their row. Only the top u = c·ln(L) queries get real attention. Cost falls from L² to L·ln L.</p>
+  <div class="diagram"><div id="d-informer"></div><div class="cap">Left: full attention computes every row. Right: ProbSparse computes only the "active" query rows (dark) and fills the rest with the average value.</div></div>
+  <div class="ex" id="c-gnn"><div class="exh">Graph neural network (GNN), as used in "Graph Patch Informer" and in Han &amp; Wang's PJM paper</div>
+    A graph has nodes (say, the five NEM regions, or the patches of a window) and edges (interconnectors, or learned similarities). One GNN layer updates each node by combining its own vector with an aggregate of its neighbours' vectors, then applying a small network. Worked step with three regions and a simple mean aggregation: NSW = 100, QLD = 80, VIC = 120, edges NSW–QLD and NSW–VIC. New NSW = f(100, mean(80, 120)) = f(100, 100); new QLD = f(80, 100); new VIC = f(120, 100). Two layers let VIC's information reach QLD via NSW. In Malyala's model the exact graph is not described in the abstract; the caption-level evidence says it sits between the patches and the Informer attention.
+  </div>
+</div>
+
+<div class="concept" id="c-timesfm">
+  <h3>TimesFM: a time-series foundation model, used zero-shot</h3>
+  <p class="one"><b>In one sentence.</b> TimesFM is a decoder-only transformer that Google pre-trained on a very large collection of real and synthetic time series so that, given any new history, it produces a forecast without any training on that data.</p>
+  <p>Internally it patches the input (32 steps per input patch), predicts a longer output patch (128 steps) per step, and was trained with a causal mask so that any prefix of the context works. It has a <b>context</b> limit (512 to 2048 steps depending on version) and takes only the target series, no covariates. "Zero-shot" means exactly that: Sinclair did not fine-tune it and fed it only the price. <b>Fine-tuning</b> would mean continuing its training on NEM data; a covariate-aware version exists but was not used.</p>
+  <div class="diagram"><div id="d-timesfm"></div><div class="cap">Pre-train once on everything; then apply to any series. The trade-off is generality against the inability to use what makes the NEM predictable (pre-dispatch).</div></div>
+  <div class="ex"><div class="exh">Where it landed</div>
+    NSW nMAPE 48 to 60 %: better than AEMO beyond 4 h, worse than every trained model. Note the spike/non-spike split: on spike windows TimesFM's 2 h score (73.1) was the second best of all models, because when a spike is already under way in the context it extrapolates it, whereas the covariate models were pulled back toward pre-dispatch.
+  </div>
+</div>
+
+<div class="concept" id="c-llm">
+  <h3>Large language models, fine-tuning, LoRA and QLoRA</h3>
+  <p class="one"><b>In one sentence.</b> An LLM is a very large decoder-only transformer trained to predict the next text token; fine-tuning continues that training on your task; LoRA makes fine-tuning cheap by freezing the model and training small low-rank add-on matrices; QLoRA additionally stores the frozen model in 4-bit precision so it fits on one GPU.</p>
+  <p>A <b>token</b> is a word piece (roughly ¾ of a word). "Generative pre-trained" means trained on the web to continue text. In Liu 2024 an <b>open-access</b> model (the paper's index terms mention no specific one) is fine-tuned to read an AEMO notice and emit a structured record. <b>LoRA</b>: for a weight matrix W (say 4096 × 4096), learn two thin matrices A (4096 × r) and B (r × 4096) with r around 8 and use W + BA; only A and B are trained. <b>QLoRA</b>: keep W in 4-bit "NormalFloat", de-quantise on the fly, train the LoRA adapters in 16-bit.</p>
+  <div class="diagram"><div id="d-lora"></div><div class="cap">The frozen block plus the thin trainable adapters. Storage and training cost drop by roughly the ratio in the example.</div></div>
+  <div class="ex"><div class="exh">Worked example</div>
+    One attention weight matrix: 4096 × 4096 = <span data-v="lora.full"></span> parameters. LoRA with rank 8: 4096 × 8 + 8 × 4096 = <span class="v" data-v="lora.lora"></span> parameters, which is <span class="v" data-v="lora.pct"></span> % of the original. Across a 7-billion-parameter model the adapters are typically 10 to 40 million parameters. In 4-bit the frozen weights take 3.5 GB instead of 14 GB.<br>
+    Extraction example: input text "LOR2 forecast for the SA region from 17:30 to 19:00" → output record {region: SA, level: LOR2, start: 17:30, end: 19:00}. Stacking such records over time gives an "event" series that is 1 during a notice window and 0 otherwise, which the CNN-LSTM reads as another input channel.
+  </div>
+  <div class="note confuse"><b>Common confusion.</b> Liu's LLM does not forecast the price in the final system; it converts text to numbers. The abstract also mentions using LLMs "for an in-depth time-series analysis", which reads as an exploratory use for traders rather than the scored model.</div>
+</div>
+
+<h2 id="part4"><span class="part-label">Part 4</span>Beyond point forecasting: state-space models, reinforcement learning, and explaining a model</h2>
+
+<div class="concept" id="c-ssm">
+  <h3>State-space models and the GRU-based DSSM</h3>
+  <p class="one"><b>In one sentence.</b> A state-space model says there is a hidden state that evolves step to step and the thing you observe is a noisy function of that state; a deep state-space model lets a network (here a GRU) learn the evolution, and Malyala's DSSM ties the hidden state to aggregate demand.</p>
+  <span class="formula">state<sub>t</sub> = F(state<sub>t−1</sub>, input<sub>t</sub>) + noise</span> <span class="formula">price<sub>t</sub> = G(state<sub>t</sub>) + noise</span>
+  <p>The classical version (Kalman filter) has F and G linear. The deep version makes F a GRU update and G a small network. The design choice in DSSM is to make the state <em>mean something</em>: by training it to reproduce demand as well as price, the state becomes an estimate of system load, and the output layer learns the demand-to-price curve. That is a supply-curve model in disguise: price steps up when the state crosses the level where more expensive plant is needed.</p>
+  <div class="diagram"><div id="d-ssm"></div><div class="cap">Hidden state evolving under the GRU; each observation is read off through G. The dotted supervision arrow is what makes the state resemble demand.</div></div>
+  <div class="ex"><div class="exh">Why "no weather" is a coherent choice</div>
+    Weather matters to price only through demand and rooftop solar. If the state is demand and the model has demand history, the weather is already inside the state. What it cannot do is anticipate a demand change that has not started yet (tomorrow's heatwave); that is precisely what a weather <em>forecast</em> covariate adds in Sinclair's model.
+  </div>
+</div>
+
+<div class="concept" id="c-rl">
+  <h3>Reinforcement learning, actor-critic, and Soft Actor-Critic (SAC)</h3>
+  <p class="one"><b>In one sentence.</b> Instead of predicting a price and then optimising against it, a reinforcement-learning agent maps what it sees (state) directly to what it does (action) and is trained by the money it makes (reward); the actor is the network that chooses actions, the critic is the network that estimates how much future reward an action leads to, and SAC adds a bonus for keeping the actor's choices random enough to keep exploring.</p>
+  <div class="kv">
+    <div>State</div><div>In Li 2024: the 64-number summary of the last 160 minutes of seven prices (from the transformer) plus the battery's state of charge.</div>
+    <div>Action</div><div>Continuous: charge/discharge power for the spot market and a bid quantity for each of the six FCAS markets.</div>
+    <div>Reward</div><div>Spot revenue (discharge MW × price, negative when charging) plus FCAS availability payments for the interval.</div>
+    <div>Policy π(a | s)</div><div>The actor: a network outputting a distribution over actions; SAC samples from it.</div>
+    <div>Q(s, a)</div><div>The critic: expected discounted future reward from taking a in s. Discount γ = 0.99 means reward n steps ahead counts 0.99<sup>n</sup>.</div>
+    <div>Entropy bonus</div><div>SAC maximises reward + α × entropy of π, so the actor stays stochastic and does not lock onto one habit before it has seen enough spikes.</div>
+  </div>
+  <div class="diagram"><div id="d-rl"></div><div class="cap">The loop. The transformer's weights are updated by the same gradient as the actor's, so it learns whatever price features make money, not whatever features predict price.</div></div>
+  <div class="ex" id="c-milp"><div class="exh">Worked example: why forecast-then-optimise can lose to an agent</div>
+    A 1 MWh battery, three intervals, actual prices <span data-v="rl.p"></span>. Perfect-information optimisation (PIO): charge at <span data-v="rl.buy"></span>, discharge at <span data-v="rl.sell"></span>, revenue A$<span class="v" data-v="rl.pio"></span>. A forecaster that predicted <span data-v="rl.f"></span> would tell the optimiser to charge at interval 2 and discharge at interval 3 for a predicted A$<span data-v="rl.fpred"></span>; at the real prices that buys at A$300 and sells at A$40, earning A$<span class="v" data-v="rl.fact"></span>. An agent trained on many such days learns "when the last 160 minutes look like this, discharge in the next interval" without ever committing to a price number, and Li's Table II shows this gained 15 to 32 % over the transformer-forecast-then-optimise benchmark on the same data. The catch: the agent has no guarantee, only a track record.
+  </div>
+  <p><b>The benchmarks in Li's table.</b> <b>MILP</b> (mixed-integer linear programming) is the exact optimiser used by LP&amp;O, TP&amp;O and PIO: given a price path, it solves for the charge/discharge schedule that maximises revenue subject to the battery's power, energy and efficiency limits. <b>LP&amp;O</b> feeds it an LSTM's forecast, <b>TP&amp;O</b> a transformer's forecast, <b>PIO</b> the actual prices (an upper bound no live strategy can reach). <b>MLP-DRL</b> is the same SAC agent with a plain dense network instead of the transformer summarising the price history.</p>
+</div>
+
+<div class="concept" id="c-shap">
+  <h3>SHAP: attributing a prediction to its inputs</h3>
+  <p class="one"><b>In one sentence.</b> SHAP splits the difference between a model's prediction and its average prediction into one share per input, where each share is the input's average marginal contribution over every possible order of adding the inputs (the Shapley value from game theory).</p>
+  <div class="ex"><div class="exh">Worked example with two inputs, by hand</div>
+    Model output for a half-hour: with no inputs (the average prediction) A$100; with only the pre-dispatch price known, A$180; with only the weather forecast known, A$110; with both, A$200.<br>
+    Order "pre-dispatch first, then weather": pre-dispatch adds 180 − 100 = 80, weather adds 200 − 180 = 20.<br>
+    Order "weather first, then pre-dispatch": weather adds 110 − 100 = 10, pre-dispatch adds 200 − 110 = 90.<br>
+    Shapley value = average over orders: pre-dispatch = (80 + 90) / 2 = <span class="v">85</span>, weather = (20 + 10) / 2 = <span class="v">15</span>. They add to 100 = 200 − 100, as they must. Feature importance for the whole test set is the mean of |SHAP| over all half-hours; that is Sinclair's Figure 8, where the pre-dispatch NSW price alone has more than 60 % of the total.
+  </div>
+  <div class="diagram"><div id="d-shap"></div><div class="cap">A SHAP dependence plot: each dot is one half-hour, the horizontal axis is the value of one input (forecast demand), the vertical axis is that input's SHAP contribution, colour is a second input (temperature). Sinclair's Figure 9 shows demand's contribution rising monotonically but with the slope depending on workday, temperature and time of day.</div></div>
+  <div class="note confuse"><b>Common confusion.</b> A high SHAP importance for the pre-dispatch price does not mean the model "copies AEMO". It means that changing the pre-dispatch input moves the output most. The model still halves AEMO's error, so what it has learned is a corrected mapping from pre-dispatch to outcome.</div>
+</div>
+
+<h2 id="part5"><span class="part-label">Part 5</span>The papers, one by one</h2>
+<p>Each card: what was measured, what went in, the accuracy table against the paper's own baselines, the architecture as a diagram, and a walk-through of one sample passing through the model. Dotted terms link back to Parts 1 to 4.</p>
+
+<!-- ===================================================== TAN 2023 -->
+<div class="card" id="tan2023">
+  <h2>1 · Tan, Shen, Yu &amp; Lu (2023) — ICEEMDAN-CNN+SSDAE for NSW day-ahead prices</h2>
+  <div class="meta"><span class="badge part">Abstract + review table</span><span class="badge price">spot price</span> <b>Electric Power Systems Research</b> 220, 109300 · doi 10.1016/j.epsr.2023.109300 · Jiangnan University group (preprint on SSRN July 2022)</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Next-day half-hourly prices for NSW1 (<a class="t" href="#c-setup">day-ahead</a>: all 48 half-hours of tomorrow from today), with a stated interest in price spikes and in training faster than a recurrent network. The pipeline has five modules: a correlation screen picks the input factors, <a class="t" href="#c-emd">ICEEMDAN</a> splits every series into intrinsic mode functions, each IMF is forecast by a <a class="t" href="#c-cnn">CNN</a> feeding a <a class="t" href="#c-ae">stacked sparse denoising autoencoder</a>, a parameter-optimisation module tunes the pieces, and the IMF forecasts are <a class="t" href="#c-hybrid">summed</a>.</p>
+  <div class="kv">
+    <div>Data</div><div>NSW spot prices from AEMO, about five years for training; tests are four three-day windows, one per season (the review notes these are not full seasons).</div>
+    <div>Inputs</div><div>Price history and "related influencing factors" that pass a correlation screen; every input series is decomposed with ICEEMDAN.</div>
+    <div>Conventional baselines</div><div>Case I: <a class="t" href="#c-nn">BPNN</a>, <a class="t" href="#c-trees">random forest, SVM, ELM</a>, CNN, <a class="t" href="#c-rnn">LSTM, GRU</a>, SDAE, SSDAE, CNN+LSTM, CNN+GRU. Later cases swap the decomposition (none, <a class="t" href="#c-wavelet">wavelet</a>, <a class="t" href="#c-ssa">SSA</a>, EEMD, ICEEMDAN) and the predictor.</div>
+  </div>
+
+  <h4>Accuracy versus conventional methods</h4>
+  <p class="small">Values re-tabulated by Sadeghi et al., <em>Energies</em> 2025 (18, 6422), Table 3, from Tan's Cases II to V. <a class="t" href="#c-mae">MAE and RMSE</a> are on normalised prices (no unit); <a class="t" href="#c-mape">MAPE</a> is a percentage. Four values = {spring, summer, autumn, winter} test windows.</p>
+  <table>
+    <thead><tr><th>Model</th><th class="num">MAPE % spring</th><th class="num">summer</th><th class="num">autumn</th><th class="num">winter</th><th class="num">MAE (normalised) spring / summer / autumn / winter</th></tr></thead>
+    <tbody>
+      <tr class="bench"><td>LSTM</td><td class="num">13.01</td><td class="num">13.91</td><td class="num">14.83</td><td class="num">16.79</td><td class="num">0.0192 / 0.0164 / 0.0215 / 0.0285</td></tr>
+      <tr class="bench"><td>GRU</td><td class="num">12.74</td><td class="num">12.28</td><td class="num">14.45</td><td class="num">14.87</td><td class="num">0.0156 / 0.0222 / 0.0251 / 0.0152</td></tr>
+      <tr class="bench"><td>CNN</td><td class="num">16.67</td><td class="num">15.72</td><td class="num">16.88</td><td class="num">16.78</td><td class="num">0.0245 / 0.0207 / 0.0287 / 0.0342</td></tr>
+      <tr><td>CNN-LSTM</td><td class="num">11.45</td><td class="num">11.43</td><td class="num">13.50</td><td class="num">13.34</td><td class="num">0.0152 / 0.0135 / 0.0166 / 0.0200</td></tr>
+      <tr><td>CNN-GRU</td><td class="num">10.96</td><td class="num">10.90</td><td class="num">12.44</td><td class="num">12.90</td><td class="num">0.0112 / 0.0191 / 0.0215 / 0.0229</td></tr>
+      <tr><td>CNN+SSDAE (no decomposition)</td><td class="num">8.40</td><td class="num">8.36</td><td class="num">9.50</td><td class="num">9.70</td><td class="num">0.0070 / 0.0135 / 0.0054 / 0.0108</td></tr>
+      <tr><td>Wavelet-CNN+SSDAE</td><td class="num">11.97</td><td class="num">10.00</td><td class="num">11.86</td><td class="num">12.36</td><td class="num">0.0210 / 0.0093 / 0.0188 / 0.0242</td></tr>
+      <tr><td>SSA-CNN+SSDAE</td><td class="num">10.24</td><td class="num">11.06</td><td class="num">11.67</td><td class="num">10.41</td><td class="num">0.0086 / 0.0142 / 0.0364 / 0.0110</td></tr>
+      <tr><td>EEMD-CNN+SSDAE</td><td class="num">9.77</td><td class="num">8.86</td><td class="num">9.65</td><td class="num">9.50</td><td class="num">0.0116 / 0.0137 / 0.0127 / 0.0104</td></tr>
+      <tr><td>ICEEMDAN-CNN</td><td class="num">14.69</td><td class="num">15.98</td><td class="num">16.91</td><td class="num">17.42</td><td class="num">0.0177 / 0.0189 / 0.0210 / 0.0197</td></tr>
+      <tr><td>ICEEMDAN-LSTM</td><td class="num">13.48</td><td class="num">12.84</td><td class="num">14.45</td><td class="num">15.59</td><td class="num">0.0242 / 0.0246 / 0.0305 / 0.0316</td></tr>
+      <tr><td>ICEEMDAN-GRU</td><td class="num">10.68</td><td class="num">11.37</td><td class="num">12.33</td><td class="num">11.80</td><td class="num">0.0199 / 0.0158 / 0.0175 / 0.0179</td></tr>
+      <tr><td>ICEEMDAN-CNN-LSTM</td><td class="num">9.91</td><td class="num">9.44</td><td class="num">9.77</td><td class="num">9.68</td><td class="num">0.0164 / 0.0090 / 0.0097 / 0.0059</td></tr>
+      <tr><td>ICEEMDAN-CNN-GRU</td><td class="num">8.42</td><td class="num">7.95</td><td class="num">8.68</td><td class="num">8.24</td><td class="num">0.0075 / 0.0082 / 0.0071 / 0.0098</td></tr>
+      <tr class="best"><td>ICEEMDAN-CNN+SSDAE (proposed)</td><td class="num">6.63</td><td class="num">6.00</td><td class="num">6.97</td><td class="num">6.75</td><td class="num">0.0013 / 0.0043 / 0.0054 / 0.0047</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> The autoencoder predictor (CNN+SSDAE) already halves the LSTM's MAPE before any decomposition, and ICEEMDAN is the only decomposition that helps it further; wavelet and SSA decomposition make it worse. ICEEMDAN also hurts a bare CNN or LSTM, so the decomposition only pays off when paired with the autoencoder. With three-day test windows, differences of a point or two are within luck.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-tan"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Each frequency component gets its own CNN + autoencoder. The sum of the component forecasts is the price forecast.</div>
+  </div>
+  <h4>Walk one day through it</h4>
+  <ol class="steps">
+    <li>Take the last N days of NSW half-hourly price and the selected factors (say demand). Run ICEEMDAN on each: the price becomes, for example, IMF1 (5-minute bid noise), IMF2 (intraday swings), IMF3 (daily cycle), IMF4 (weekly), residual (trend).</li>
+    <li>For IMF3, the CNN slides its filters over the last few days of IMF3 and hands the feature maps to the SSDAE, which compresses them and regresses tomorrow's 48 values of IMF3. Same for every other IMF, each with its own network.</li>
+    <li>Add the five IMF forecasts half-hour by half-hour. That sum is tomorrow's price forecast. The smooth IMFs are forecast almost perfectly; nearly all of the 6.6 % MAPE comes from IMF1 and IMF2.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.1016/j.epsr.2023.109300">doi 10.1016/j.epsr.2023.109300</a> (abstract only reachable) ·
+    <a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4156560">SSRN 4156560 preprint</a> ·
+    <a href="https://doi.org/10.3390/en18246422">Energies 2025, 18, 6422 review (Table 3 re-tabulates Tan's results)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== GHIMIRE 2023 -->
+<div class="card" id="ghimire2023">
+  <h2>2 · Ghimire et al. (2023) — TNET transformer for Queensland electricity demand</h2>
+  <div class="meta"><span class="badge full">Full text read</span><span class="badge demand">demand, not price</span> <b>Energy and AI</b> 14, 100302 · doi 10.1016/j.egyai.2023.100302 · University of Southern Queensland with Universidad de Alcalá / Rey Juan Carlos</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Next-day electricity demand at four Energex distribution substations in south-east Queensland (Coopers Plains, Browns Plains, Beenleigh, Bethania), using a <a class="t" href="#c-encdec">transformer encoder</a> that reads six <a class="t" href="#c-setup">lagged</a> demand values together with ten local climate variables. Sinclair cites it as the nearest precedent for a transformer on NEM-area data, but it is a load forecast at feeder scale, not a market price.</p>
+  <div class="kv">
+    <div>Data</div><div>Half-hourly Energex demand (280,561 records) summed to 3,640 daily values. <a class="t" href="#c-split">Train</a> 1 Jul 2011 to 30 Jun 2021 (2,801 days, 20 % held out for validation), test 1 Jul 2021 to 30 Jun 2022 (365 days).</div>
+    <div>Inputs</div><div>Six lags of demand (lag count from the false-nearest-neighbour test, delay from mutual information) plus SILO climate: rainfall, radiation, humidity, evaporation, max and min temperature and others, giving 15 to 21 features per site. The first lag alone carries 32 to 40 % of feature importance.</div>
+    <div>Model</div><div><a class="t" href="#c-pos">Time2Vec</a> embedding, three <a class="t" href="#c-attn">multi-head self-attention</a> blocks with 12 heads each, each followed by <a class="t" href="#c-reg">dropout, layer normalisation</a> and a 1-D <a class="t" href="#c-cnn">convolution</a> with ReLU; global average pooling; dense output of one value. Prediction intervals at 95 % from kernel density estimation.</div>
+    <div>Baselines</div><div><a class="t" href="#c-rnn">LSTM, bidirectional LSTM, GRU</a>, CNN, <a class="t" href="#c-nn">DNN</a>, all tuned on the same inputs.</div>
+  </div>
+
+  <h4>Accuracy versus conventional methods (test year Jul 2021 to Jun 2022)</h4>
+  <p class="small">From the paper's Tables 5 and 7. <a class="t" href="#c-mae">RMSE and MAE</a> in MW; <a class="t" href="#c-mape">RMSPE and MAPE</a> in percent; <a class="t" href="#c-corr">r</a> is correlation. The transformer is best on MAPE at every site and on RMSE at every site.</p>
+  <table>
+    <thead><tr><th>Site</th><th>Model</th><th class="num">r</th><th class="num">RMSE (MW)</th><th class="num">MAE (MW)</th><th class="num">RMSPE %</th><th class="num">MAPE %</th></tr></thead>
+    <tbody>
+      <tr class="best"><td rowspan="6">Coopers Plains</td><td>TNET (proposed)</td><td class="num">0.955</td><td class="num">42.31</td><td class="num">27.35</td><td class="num">10.27</td><td class="num">7.50</td></tr>
+      <tr><td>GRU</td><td class="num">0.950</td><td class="num">44.10</td><td class="num">29.33</td><td class="num">10.70</td><td class="num">8.17</td></tr>
+      <tr><td>CNN</td><td class="num">0.948</td><td class="num">44.94</td><td class="num">30.78</td><td class="num">10.90</td><td class="num">8.34</td></tr>
+      <tr><td>DNN</td><td class="num">0.948</td><td class="num">45.21</td><td class="num">30.78</td><td class="num">10.97</td><td class="num">8.50</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.948</td><td class="num">45.75</td><td class="num">30.81</td><td class="num">11.10</td><td class="num">8.53</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.946</td><td class="num">45.79</td><td class="num">31.18</td><td class="num">11.11</td><td class="num">8.65</td></tr>
+      <tr class="best"><td rowspan="6">Browns Plains</td><td>TNET (proposed)</td><td class="num">0.956</td><td class="num">55.35</td><td class="num">43.23</td><td class="num">5.94</td><td class="num">4.77</td></tr>
+      <tr><td>GRU</td><td class="num">0.958</td><td class="num">57.10</td><td class="num">45.28</td><td class="num">6.12</td><td class="num">5.03</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.953</td><td class="num">57.78</td><td class="num">45.82</td><td class="num">6.20</td><td class="num">5.01</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.951</td><td class="num">58.67</td><td class="num">46.32</td><td class="num">6.29</td><td class="num">5.00</td></tr>
+      <tr><td>CNN</td><td class="num">0.954</td><td class="num">59.27</td><td class="num">47.21</td><td class="num">6.36</td><td class="num">5.25</td></tr>
+      <tr><td>DNN</td><td class="num">0.943</td><td class="num">89.04</td><td class="num">71.80</td><td class="num">9.55</td><td class="num">8.38</td></tr>
+      <tr class="best"><td rowspan="6">Beenleigh</td><td>TNET (proposed)</td><td class="num">0.942</td><td class="num">34.83</td><td class="num">24.37</td><td class="num">8.87</td><td class="num">6.56</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.941</td><td class="num">35.07</td><td class="num">24.53</td><td class="num">8.94</td><td class="num">6.56</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.935</td><td class="num">36.68</td><td class="num">26.28</td><td class="num">9.35</td><td class="num">7.02</td></tr>
+      <tr><td>DNN</td><td class="num">0.941</td><td class="num">36.80</td><td class="num">26.45</td><td class="num">9.38</td><td class="num">6.95</td></tr>
+      <tr><td>CNN</td><td class="num">0.917</td><td class="num">40.92</td><td class="num">30.55</td><td class="num">10.43</td><td class="num">8.13</td></tr>
+      <tr><td>GRU</td><td class="num">0.912</td><td class="num">41.86</td><td class="num">30.87</td><td class="num">10.67</td><td class="num">8.24</td></tr>
+      <tr class="best"><td rowspan="6">Bethania</td><td>TNET (proposed)</td><td class="num">0.970</td><td class="num">21.96</td><td class="num">17.06</td><td class="num">6.86</td><td class="num">5.53</td></tr>
+      <tr class="bench"><td>LSTM</td><td class="num">0.950</td><td class="num">23.22</td><td class="num">18.18</td><td class="num">7.26</td><td class="num">5.77</td></tr>
+      <tr><td>CNN</td><td class="num">0.964</td><td class="num">23.66</td><td class="num">18.42</td><td class="num">7.40</td><td class="num">5.85</td></tr>
+      <tr><td>GRU</td><td class="num">0.843</td><td class="num">24.10</td><td class="num">18.87</td><td class="num">7.54</td><td class="num">5.97</td></tr>
+      <tr class="bench"><td>BiLSTM</td><td class="num">0.931</td><td class="num">29.73</td><td class="num">23.22</td><td class="num">9.29</td><td class="num">7.28</td></tr>
+      <tr><td>DNN</td><td class="num">0.951</td><td class="num">30.19</td><td class="num">24.42</td><td class="num">9.44</td><td class="num">8.15</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> The gains are real but modest: 5 to 10 % lower MAE than the next-best recurrent model, and the runner-up changes from site to site (GRU, BiLSTM, LSTM) while the transformer is consistently first. That consistency is the paper's main argument. It also passed <a class="t" href="#c-dm">Diebold-Mariano</a> tests against each baseline. The <a class="t" href="#c-gpi">GPI, Willmott, Nash-Sutcliffe and Legates-McCabe</a> indices in Tables 6 and 8 rank the models the same way.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-ghimire23"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">An encoder-only transformer. There is no decoder because the output is a single number (tomorrow's demand). Time2Vec replaces the usual positional encoding with learned sine features of time.</div>
+  </div>
+  <h4>Walk one day through it</h4>
+  <ol class="steps">
+    <li>Build the input row for Coopers Plains on a given day: the six most recent daily demands and the ten SILO climate values, 16 numbers, each scaled.</li>
+    <li>Time2Vec turns the day index into a handful of learned sinusoids and appends them, so the model knows the weekday and season.</li>
+    <li>Three attention blocks let every element of the row weigh every other (the lag-1 demand attends to the temperature, and so on); each block ends with a 1-D convolution that mixes neighbouring positions.</li>
+    <li>Global average pooling squashes the sequence to one vector; a single linear unit reads out tomorrow's MW. Kernel density estimation over the training residuals gives the 95 % band.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.1016/j.egyai.2023.100302">doi 10.1016/j.egyai.2023.100302</a> (open access) ·
+    <a href="https://ebuah.uah.es/xmlui/handle/10017/63099">Universidad de Alcalá repository copy (PDF used here)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== LI 2024 -->
+<div class="card" id="li2024">
+  <h2>3 · Li, Wang, Zhang &amp; Wang (2024) — TempDRL: a transformer feeding a reinforcement-learning battery bidder</h2>
+  <div class="meta"><span class="badge full">Full text read (arXiv version)</span><span class="badge ops">battery bidding</span> <b>IEEE Trans. Energy Markets, Policy and Regulation</b> 2(3), 392-406 · doi 10.1109/TEMPR.2024.3372656 · Monash University</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Not a forecast error but revenue: how much a 2 MW / 10 MWh battery earns over two months when it bids simultaneously into the spot market and the six contingency <a class="t" href="#c-nem">FCAS</a> markets. The transformer's job is to turn the last 32 five-minute intervals (160 minutes) of all seven prices into a 64-number summary; a <a class="t" href="#c-rl">Soft Actor-Critic</a> agent then chooses charge or discharge power and the bid quantities.</p>
+  <div class="kv">
+    <div>Data</div><div>2016 NEM prices for VIC, NSW, QLD, SA and TAS at 5-minute resolution; first ten months train, last two months test.</div>
+    <div>Inputs</div><div>Seven price series only (spot + six FCAS), no weather, no demand.</div>
+    <div>Model</div><div>Prices embedded to 64 dimensions, two stacked <a class="t" href="#c-attn">multi-head attention</a> layers with 8 heads, global average pooling to a 1×64 vector, then SAC with two 512-unit hidden layers, <a class="t" href="#c-train">learning rate</a> 0.0003, discount 0.99.</div>
+    <div>Baselines</div><div>MLP-DRL (same agent without the transformer), LP&amp;O (LSTM price forecast + <a class="t" href="#c-milp">MILP</a> optimiser), TP&amp;O (transformer forecast + optimiser), and PIO (optimiser with perfect information, the ceiling).</div>
+  </div>
+
+  <h4>Revenue versus the benchmarks (Table II, joint spot + FCAS participation, two-month test, AU$)</h4>
+  <table>
+    <thead><tr><th>Region</th><th class="num">MLP-DRL</th><th class="num">LSTM forecast + optimiser</th><th class="num">Transformer forecast + optimiser</th><th class="num">TempDRL (proposed)</th><th class="num">Gain over best benchmark</th></tr></thead>
+    <tbody>
+      <tr><td>VIC</td><td class="num">22,975</td><td class="num">29,049</td><td class="num">30,320</td><td class="num"><b>35,686</b></td><td class="num">+18 %</td></tr>
+      <tr><td>NSW</td><td class="num">18,052</td><td class="num">19,564</td><td class="num">19,682</td><td class="num"><b>25,948</b></td><td class="num">+32 %</td></tr>
+      <tr><td>QLD</td><td class="num">31,052</td><td class="num">38,381</td><td class="num">39,640</td><td class="num"><b>46,703</b></td><td class="num">+18 %</td></tr>
+      <tr><td>SA</td><td class="num">40,920</td><td class="num">41,413</td><td class="num">41,165</td><td class="num"><b>49,146</b></td><td class="num">+19 %</td></tr>
+      <tr><td>TAS</td><td class="num">45,805</td><td class="num">43,287</td><td class="num">44,558</td><td class="num"><b>52,478</b></td><td class="num">+15 %</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> The comparison that matters for forecasting is TP&amp;O versus TempDRL: the same transformer used as a price forecaster feeding an optimiser earns 15 to 32 % less than the same transformer used as a feature extractor for an agent (the <a class="t" href="#c-milp">worked example</a> in Part 4 shows why). The authors read the attention weights and find the agent looks hardest at past intervals whose price differs most from the current one, which is what a spread-trading heuristic would do. The 2016 data predate the 5-minute settlement change and the current battery fleet, so the dollar figures are illustrative.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-li"></div>
+    <div class="legend"><span class="li">input</span><span class="lm">learned model</span><span class="lo">output</span><span class="lb">environment</span></div>
+    <div class="cap">Reinforcement learning loop: the agent acts, the market simulator pays it, and the payment trains both the actor and the transformer end to end. Nothing is ever trained to "predict the price".</div>
+  </div>
+  <h4>Walk one interval through it</h4>
+  <ol class="steps">
+    <li>At 17:35 the state is the 32 × 7 matrix of the last 160 minutes of spot and six FCAS prices, plus state of charge 60 %.</li>
+    <li>Each of the 32 rows is embedded to 64 numbers and positionally encoded; two attention layers let each interval weigh the others (the paper finds intervals whose price differs most from the latest get the most weight); the 32 rows are averaged into one 64-vector.</li>
+    <li>The actor turns that vector and the state of charge into an action: discharge 1.6 MW into spot, offer 0.4 MW to fast-raise, 0.4 MW to slow-raise, and so on.</li>
+    <li>The simulator settles the interval at the actual prices, pays the revenue, updates the state of charge, and the critic's error on that revenue nudges the actor, the critic and the transformer.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://arxiv.org/abs/2402.19110">arXiv 2402.19110</a> ·
+    <a href="https://ieeexplore.ieee.org/document/10458427/">IEEE Xplore 10458427</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== GHIMIRE 2024 -->
+<div class="card" id="ghimire2024">
+  <h2>4 · Ghimire et al. (2024) — MoDWT-CRVFL for NSW half-hourly prices</h2>
+  <div class="meta"><span class="badge part">Abstract + review table</span><span class="badge price">spot price</span> <b>Applied Energy</b> 374, 123920 · doi 10.1016/j.apenergy.2024.123920 · University of Southern Queensland, Universidad de Alcalá, UTS</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Half-hourly NSW spot prices for the year 2022, scored by season and for the whole year. The chain is: <a class="t" href="#c-wavelet">MoDWT</a> splits the price history into smooth and detail components; a <a class="t" href="#c-cnn">CNN</a> extracts features from those components; a <a class="t" href="#c-rvfl">random vector functional link network</a> maps the features to the price in one closed-form step; and <a class="t" href="#c-bo">Bayesian optimisation</a> chooses the hyperparameters. This is the paper Sinclair calls "a hybrid MoDWT decomposition technique with a Bayesian-optimised CNN".</p>
+  <div class="kv">
+    <div>Data</div><div>Half-hourly NSW prices; 2022 is the test year (summer, autumn, winter, spring, annual).</div>
+    <div>Inputs</div><div>Wavelet components of the lagged price series. Lag count and wavelet level are set by Bayesian optimisation (the exact values are in the paywalled body).</div>
+    <div>Baselines</div><div>Same wavelet front end with LSTM, DNN, <a class="t" href="#c-trees">XGBoost, random forest</a> and MLP predictors; and raw-price Bi-LSTM, LSTM, DNN, RF, XGBoost and MLP.</div>
+  </div>
+
+  <h4>Accuracy versus conventional methods (2022)</h4>
+  <p class="small"><a class="t" href="#c-kge">KGE</a> rewards getting the mean, the spread and the correlation right at once (1 is perfect). <a class="t" href="#c-gpi">GPI</a> is the paper's own composite (higher is better, only comparable within the paper). Annual KGE values are listed in the abstract in this order; the abstract names 11 models but gives 10 numbers, so the last pairing is uncertain.</p>
+  <div class="grid2">
+    <table>
+      <thead><tr><th>Model</th><th class="num">KGE (annual 2022)</th></tr></thead>
+      <tbody>
+        <tr class="best"><td>MoDWT-CRVFL (proposed)</td><td class="num">0.972</td></tr>
+        <tr><td>MoDWT-XGBoost</td><td class="num">0.963</td></tr>
+        <tr><td>MoDWT-LSTM</td><td class="num">0.958</td></tr>
+        <tr><td>MoDWT-random forest</td><td class="num">0.943</td></tr>
+        <tr><td>MoDWT-MLP</td><td class="num">0.930</td></tr>
+        <tr><td>MoDWT-DNN</td><td class="num">0.899</td></tr>
+        <tr class="bench"><td>RF (raw prices)</td><td class="num">0.739</td></tr>
+        <tr class="bench"><td>XGBoost (raw prices)</td><td class="num">0.738</td></tr>
+        <tr class="bench"><td>LSTM (raw prices)</td><td class="num">0.708</td></tr>
+        <tr class="bench"><td>DNN (raw prices)</td><td class="num">0.696</td></tr>
+        <tr class="bench"><td>Bi-LSTM (raw prices)</td><td class="num">0.661</td></tr>
+      </tbody>
+    </table>
+    <div>
+      <table>
+        <thead><tr><th>Period</th><th class="num">GPI of MoDWT-CRVFL</th></tr></thead>
+        <tbody>
+          <tr><td>Summer</td><td class="num">1.61</td></tr><tr><td>Autumn</td><td class="num">1.33</td></tr><tr><td>Winter</td><td class="num">1.85</td></tr><tr><td>Spring</td><td class="num">1.30</td></tr><tr><td>Annual</td><td class="num">0.78</td></tr>
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>Model (via Energies 2025 review)</th><th class="num">MAE A$/MWh</th><th class="num">RMSE A$/MWh</th><th class="num">R²</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>MoDWT-CRVFL</td><td class="num">6.03</td><td class="num">8.62</td><td class="num">0.999</td></tr>
+          <tr><td>MoDWT-LSTM</td><td class="num">22.50</td><td class="num">37.16</td><td class="num">0.993</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p><b>Reading it.</b> The wavelet front end does most of the work: every decomposed model scores KGE 0.90 to 0.97 while every raw-price model sits at 0.66 to 0.74. The RVFL adds a little on top of XGBoost and LSTM. An RMSE of A$8.6/MWh on 2022 NSW prices, a year with a June price-cap intervention and hundreds of spike half-hours, is remarkably low and should be read with the <a class="t" href="#c-leak">leakage</a> caveat: if the wavelet components were computed over the full series, the "past" inputs at each step contain information from after it.</p>
+
+  <h4>Architecture</h4>
+  <div class="diagram"><div id="d-ghimire24"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Bayesian optimisation sits outside the pipeline, re-running it with new settings and keeping what scores best on validation data.</div>
+  </div>
+  <h4>Walk one half-hour through it</h4>
+  <ol class="steps">
+    <li>Take the last L half-hours of NSW price (L chosen by the optimiser). Apply the MoDWT at J levels: the price becomes J detail series plus one approximation, all length L, as in the <a class="t" href="#c-wavelet">hand example</a>.</li>
+    <li>Stack them as J+1 channels and run the CNN's filters along them; flatten the feature maps into one vector.</li>
+    <li>Push that vector through the RVFL's random hidden layer, concatenate with the vector itself, and multiply by the least-squares output weights. The result is the next half-hour's price.</li>
+    <li>Outside this loop, Bayesian optimisation has tried perhaps 30 combinations of (L, J, filter count, hidden units) and kept the one with the best validation score.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.1016/j.apenergy.2024.123920">doi 10.1016/j.apenergy.2024.123920</a> (open access, but the publisher site was captcha-walled during compilation; abstract taken from the ADS and RePEc mirrors) ·
+    <a href="https://ui.adsabs.harvard.edu/abs/2024ApEn..37423920G/abstract">ADS abstract</a> ·
+    <a href="https://doi.org/10.3390/en18246422">Energies 2025 review, Table 3 (MAE/RMSE/R² row)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== LIU 2024 -->
+<div class="card" id="liu2024">
+  <h2>5 · Liu, Cai, Dalzell &amp; Mills (2024) — a fine-tuned LLM reads AEMO market notices for a CNN-LSTM</h2>
+  <div class="meta"><span class="badge abs">Abstract + captions only</span><span class="badge price">extreme spot prices</span> <b>IECON 2024</b> (50th IEEE Industrial Electronics Society conference), pp. 1-6 · doi 10.1109/IECON55916.2024.10906045 · RMIT University and La Trobe University</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Spot prices during extreme events, for the benefit of retail traders. AEMO's <a class="t" href="#c-nem">market notices</a> (lack-of-reserve declarations and the like) explain why a spike is coming, but they are free text. A <a class="t" href="#c-llm">large language model fine-tuned with QLoRA</a> converts each notice into structured fields (region, time window, event type), producing an "event" time series. A <a class="t" href="#c-cnn">CNN</a>-<a class="t" href="#c-rnn">LSTM</a> then takes both the <a class="t" href="#c-wavelet">wavelet</a>-transformed price history and the event series and produces a forecast that is "adjusted" when an event is active. Figures show the adjusted versus unadjusted forecast for SA on 4 May 2023 and NSW on 21 June 2023, and an example of ChatGPT-4 extracting an LOR notice.</p>
+  <div class="kv">
+    <div>Data</div><div>NEM prices and AEMO market notices; the two worked examples are from May and June 2023. The training window is not in the abstract.</div>
+    <div>Inputs</div><div>Price history (wavelet-transformed, per the index terms) and LLM-extracted notice events.</div>
+    <div>Baselines</div><div>Index terms list RMSE, MSE, MLP and RNN, so a CNN-LSTM without the notice channel and simpler networks are compared, but the numbers are behind the IEEE paywall.</div>
+  </div>
+  <div class="note warn">No accuracy table is shown because the paper's results could not be reached. Sinclair's summary is that notice information "can meaningfully improve forecasts during volatile periods". Treat that as a qualitative claim until the paper is read in full. A related 2025 benchmark (NSW-EPNews, arXiv 2506.11050) found the opposite for news text fed to general-purpose LLMs, so the fine-tuning and the structured extraction are probably the load-bearing parts.</div>
+
+  <h4>Architecture (reconstructed from the abstract and figure captions)</h4>
+  <div class="diagram"><div id="d-liu"></div>
+    <div class="legend"><span class="li">input</span><span class="lp">preprocessing</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Two channels merge: numbers (price) and text (notices). The LLM is only used to turn text into a numeric event series; it does not forecast prices itself in the final system.</div>
+  </div>
+  <h4>Walk one afternoon through it</h4>
+  <ol class="steps">
+    <li>14:10, AEMO publishes "LOR2 forecast for SA 17:30 to 19:00". The fine-tuned LLM reads it and emits {SA, LOR2, 17:30, 19:00}.</li>
+    <li>The event channel for SA is set to 1 (or to a severity code) for the half-hours 17:30 to 19:00 and 0 elsewhere.</li>
+    <li>The wavelet-transformed price history and the event channel go into the CNN-LSTM. The convolution finds local shapes; the LSTM carries the day's context; the output for 18:00 is raised because the event channel is on.</li>
+    <li>Figure 3 of the paper compares that adjusted forecast to the unadjusted one for SA on 4 May 2023.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://ieeexplore.ieee.org/document/10906045/">IEEE Xplore 10906045 (abstract, index terms, figure captions)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== MALYALA 2024 -->
+<div class="card" id="malyala2024">
+  <h2>6 · Malyala, Thattai, Malik &amp; Ravishankar (2024) — GPI-DSSM: forecasting RRP from price and demand only</h2>
+  <div class="meta"><span class="badge abs">Abstract + captions only</span><span class="badge price">regional reference price</span> <b>ICSCGE 2024</b> (4th International Conference on Smart City and Green Energy, Sydney), pp. 156-161 · doi 10.1109/ICSCGE64239.2024.11064192 · UNSW Sydney</div>
+
+  <h4>What they set out to measure</h4>
+  <p>The <a class="t" href="#c-nem">regional reference price</a> and aggregate demand of a whole NEM state, with the deliberate choice to leave weather out. Their argument: a state spans many climates, so a single weather series adds noise; demand already integrates the weather that matters. Two models are fused. The Graph-based Patch Informer (GPI) is an <a class="t" href="#c-informer">Informer</a> that cuts the sequence into <a class="t" href="#c-patchtst">patches</a> and adds a <a class="t" href="#c-gnn">graph layer</a>. The Deep State Sequential Memory (DSSM) is a <a class="t" href="#c-ssm">GRU state-space model</a> whose hidden state is tied to aggregate demand. Training uses a smooth L1 (<a class="t" href="#c-loss">Huber-like</a>) loss.</p>
+  <div class="kv">
+    <div>Data</div><div>State-wide RRP and total demand; the state and years are not in the abstract.</div>
+    <div>Inputs</div><div>Price and demand history only.</div>
+    <div>Baselines</div><div>Figure captions show sensitivity to model dimension, number of layers and hidden dimension, and a feed-forward output comparison; an LSTM and attention baseline are implied by the index terms. No numbers reachable.</div>
+  </div>
+  <div class="note warn">No accuracy table: paywalled. Sinclair cites this paper for the claim that "reliable forecasts can be achieved using only price and demand without weather inputs", which is at odds with Sinclair's own SHAP result that weather forecasts modulate the demand effect. The two are reconcilable if Malyala used observed weather while Sinclair used forecast weather aligned to the horizon (see the <a class="t" href="#c-ssm">DSSM entry</a>).</div>
+
+  <h4>Architecture (reconstructed from the abstract)</h4>
+  <div class="diagram"><div id="d-malyala"></div>
+    <div class="legend"><span class="li">input</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Two branches read the same price-and-demand history: an attention branch for long patterns and a recurrent branch that carries demand as its memory. Their outputs are combined into the RRP forecast.</div>
+  </div>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://ieeexplore.ieee.org/document/11064192/">IEEE Xplore 11064192 (abstract, index terms, figure captions)</a>
+  </div></details>
+</div>
+
+<!-- ===================================================== SINCLAIR 2026 -->
+<div class="card" id="sinclair2026">
+  <h2>7 · Sinclair, Shepley &amp; Hajati (2026) — Learning the Grid: transformer architectures versus AEMO pre-dispatch</h2>
+  <div class="meta"><span class="badge full">Full text read</span><span class="badge price">spot price, 3 regions</span> <b>Applied Sciences</b> 16(1), 75 · doi 10.3390/app16010075 · published 21 Dec 2025 · University of New England, Armidale</div>
+
+  <h4>What they set out to measure</h4>
+  <p>Half-hourly RRP from 2 to 16 hours ahead in NSW1, then QLD1 and VIC1, using unmodified <a class="t" href="#c-encdec">transformer architectures</a> and scoring them against AEMO's published <a class="t" href="#c-nem">pre-dispatch</a> price at the same horizons. The one design choice that turns out to matter: the decoder is fed <a class="t" href="#c-covariates">known-future covariates</a>, above all AEMO's own pre-dispatch price and demand forecasts and the weather forecast for the capital city. A <a class="t" href="#c-shap">SHAP</a> analysis then shows the pre-dispatch RRP alone carries over 60 % of the model's feature importance. The best model is the decoder-only variant, which never sees the past at all.</p>
+  <div class="kv">
+    <div>Data</div><div>30-minute records from November 2022 to August 2025, 49,447 half-hours. 80:20 chronological <a class="t" href="#c-split">split</a>: 37,085 training, 2,440 validation, 9,858 test. Hyperparameters chosen by five-fold walk-forward validation. Dataset published on Kaggle; code on GitHub; live API at nem.redaxe.com.</div>
+    <div>Encoder inputs (past 96 half-hours = 48 h)</div><div>RRP, demand, net interchange, capital-city temperature, cloud cover, humidity, wind speed (Open-Meteo), workday flag, <a class="t" href="#c-pos">sine/cosine</a> of half-hour, day of week and month.</div>
+    <div>Decoder inputs (next 32 half-hours = 16 h)</div><div>The same variables as AEMO pre-dispatch forecasts and Open-Meteo weather forecasts, plus hours-to-delivery.</div>
+    <div>Model sizes</div><div>Small (used in the tables): 3 <a class="t" href="#c-tlayer">layers</a>, 4 heads, d_model 128, feed-forward 512, dropout 0.05. Tiny / medium / large also tested; small was best at 2 and 4 h and within 1 % elsewhere. <a class="t" href="#c-loss">Huber loss</a> (δ 0.8), Adam at 2e-4, <a class="t" href="#c-scaling">quantile-transformer scaling</a>, 20 epochs with early stopping.</div>
+    <div>Baselines</div><div>Two-layer <a class="t" href="#c-rnn">LSTM</a> (same inputs), <a class="t" href="#c-tft">Temporal Fusion Transformer</a> (quantile loss), <a class="t" href="#c-patchtst">PatchTST</a> (past only, patch 24 stride 6), <a class="t" href="#c-timesfm">TimesFM</a> (pre-trained, zero-shot, price only), and AEMO pre-dispatch.</div>
+    <div>Metric</div><div><a class="t" href="#c-nmape">nMAPE</a> = mean absolute error divided by the mean observed price, times 100. Also <a class="t" href="#c-mae">MAE</a> in A$/MWh and a <a class="t" href="#c-dm">Diebold-Mariano</a> test against AEMO.</div>
+  </div>
+
+  <h4>Accuracy versus AEMO and conventional methods: NSW1 nMAPE %, lower is better (Table 4)</h4>
+  <table>
+    <thead><tr><th>Model</th><th class="num">2 h</th><th class="num">4 h</th><th class="num">8 h</th><th class="num">12 h</th><th class="num">16 h</th><th>Uses future covariates?</th></tr></thead>
+    <tbody>
+      <tr class="best"><td>Decoder-only transformer (parallel)</td><td class="num">33.6</td><td class="num">34.2</td><td class="num">36.8</td><td class="num">38.4</td><td class="num">39.2</td><td>Yes (only those)</td></tr>
+      <tr><td>Temporal Fusion Transformer</td><td class="num">36.3</td><td class="num">37.7</td><td class="num">38.4</td><td class="num">39.5</td><td class="num">40.8</td><td>Yes</td></tr>
+      <tr><td>Encoder-decoder transformer (parallel)</td><td class="num">37.9</td><td class="num">37.9</td><td class="num">38.2</td><td class="num">40.1</td><td class="num">40.5</td><td>Yes</td></tr>
+      <tr><td>Decoder-only, autoregressive</td><td class="num">38.7</td><td class="num">38.5</td><td class="num">39.5</td><td class="num">39.5</td><td class="num">40.2</td><td>Yes</td></tr>
+      <tr><td>Two-layer LSTM</td><td class="num">38.2</td><td class="num">40.1</td><td class="num">42.0</td><td class="num">42.5</td><td class="num">44.4</td><td>Yes</td></tr>
+      <tr><td>Encoder-decoder, autoregressive</td><td class="num">40.8</td><td class="num">42.0</td><td class="num">42.7</td><td class="num">43.0</td><td class="num">43.0</td><td>Yes</td></tr>
+      <tr><td>Encoder-only transformer</td><td class="num">42.7</td><td class="num">44.0</td><td class="num">45.0</td><td class="num">45.6</td><td class="num">46.6</td><td>No</td></tr>
+      <tr><td>TimesFM (zero-shot, price only)</td><td class="num">48.3</td><td class="num">53.3</td><td class="num">59.4</td><td class="num">60.2</td><td class="num">57.8</td><td>No</td></tr>
+      <tr><td>PatchTST</td><td class="num">59.4</td><td class="num">64.7</td><td class="num">66.4</td><td class="num">65.0</td><td class="num">63.6</td><td>No</td></tr>
+      <tr class="bench"><td>AEMO pre-dispatch (NEM)</td><td class="num">65.6</td><td class="num">82.7</td><td class="num">116.0</td><td class="num">109.6</td><td class="num">114.6</td><td>It is the covariate</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2">
+    <div>
+      <p class="small"><b>QLD1 nMAPE % (Table 5), models retrained on QLD targets.</b></p>
+      <table>
+        <thead><tr><th>Model</th><th class="num">2 h</th><th class="num">4 h</th><th class="num">8 h</th><th class="num">12 h</th><th class="num">16 h</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>Decoder-only</td><td class="num">29.2</td><td class="num">30.6</td><td class="num">31.2</td><td class="num">31.9</td><td class="num">32.2</td></tr>
+          <tr><td>Encoder-decoder</td><td class="num">30.0</td><td class="num">31.3</td><td class="num">31.7</td><td class="num">32.0</td><td class="num">32.7</td></tr>
+          <tr><td>TFT</td><td class="num">29.3</td><td class="num">32.1</td><td class="num">35.3</td><td class="num">37.2</td><td class="num">36.5</td></tr>
+          <tr><td>LSTM</td><td class="num">30.3</td><td class="num">32.0</td><td class="num">34.5</td><td class="num">34.9</td><td class="num">35.5</td></tr>
+          <tr><td>Encoder-only</td><td class="num">42.2</td><td class="num">43.6</td><td class="num">45.3</td><td class="num">45.0</td><td class="num">45.1</td></tr>
+          <tr><td>PatchTST</td><td class="num">60.3</td><td class="num">77.5</td><td class="num">97.6</td><td class="num">94.3</td><td class="num">99.0</td></tr>
+          <tr><td>TimesFM</td><td class="num">62.1</td><td class="num">82.5</td><td class="num">104.3</td><td class="num">99.0</td><td class="num">105.6</td></tr>
+          <tr class="bench"><td>AEMO pre-dispatch</td><td class="num">57.0</td><td class="num">79.1</td><td class="num">120.4</td><td class="num">124.7</td><td class="num">121.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <p class="small"><b>VIC1 nMAPE % (Table 6). The only region where AEMO wins at 2 h and where TFT beats the plain transformers.</b></p>
+      <table>
+        <thead><tr><th>Model</th><th class="num">2 h</th><th class="num">4 h</th><th class="num">8 h</th><th class="num">12 h</th><th class="num">16 h</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>TFT</td><td class="num">36.3</td><td class="num">37.7</td><td class="num">37.7</td><td class="num">39.6</td><td class="num">39.6</td></tr>
+          <tr><td>Encoder-decoder</td><td class="num">38.0</td><td class="num">38.8</td><td class="num">39.2</td><td class="num">40.5</td><td class="num">41.3</td></tr>
+          <tr><td>Decoder-only</td><td class="num">37.3</td><td class="num">38.9</td><td class="num">40.3</td><td class="num">40.8</td><td class="num">41.7</td></tr>
+          <tr><td>LSTM</td><td class="num">39.7</td><td class="num">42.1</td><td class="num">44.1</td><td class="num">44.8</td><td class="num">45.2</td></tr>
+          <tr><td>Encoder-only</td><td class="num">61.3</td><td class="num">63.0</td><td class="num">64.7</td><td class="num">64.7</td><td class="num">65.4</td></tr>
+          <tr><td>PatchTST</td><td class="num">82.9</td><td class="num">95.1</td><td class="num">105.1</td><td class="num">101.6</td><td class="num">107.7</td></tr>
+          <tr><td>TimesFM</td><td class="num">85.2</td><td class="num">100.3</td><td class="num">112.3</td><td class="num">107.2</td><td class="num">114.5</td></tr>
+          <tr class="bench"><td>AEMO pre-dispatch</td><td class="num"><b>35.7</b></td><td class="num">41.0</td><td class="num">60.3</td><td class="num">59.3</td><td class="num">61.4</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="small"><b>NSW1 MAE in A$/MWh (Table A2) and the spike / non-spike split (Table A1, spike = the 32-step window contains at least one price of A$5,000 or more).</b></p>
+  <table>
+    <thead><tr><th>Model</th><th class="num">MAE 2 h</th><th class="num">MAE 8 h</th><th class="num">MAE 16 h</th><th class="num">nMAPE 2 h spike</th><th class="num">2 h non-spike</th><th class="num">nMAPE 16 h spike</th><th class="num">16 h non-spike</th></tr></thead>
+    <tbody>
+      <tr class="best"><td>Decoder-only</td><td class="num">42.16</td><td class="num">46.01</td><td class="num">49.01</td><td class="num">70.8</td><td class="num">23.9</td><td class="num">82.2</td><td class="num">27.8</td></tr>
+      <tr><td>TFT</td><td class="num">45.53</td><td class="num">48.10</td><td class="num">51.02</td><td class="num">84.6</td><td class="num">23.7</td><td class="num">85.9</td><td class="num">28.8</td></tr>
+      <tr><td>Encoder-decoder</td><td class="num">47.48</td><td class="num">47.81</td><td class="num">50.69</td><td class="num">82.4</td><td class="num">26.2</td><td class="num">85.0</td><td class="num">28.7</td></tr>
+      <tr><td>LSTM</td><td class="num">47.83</td><td class="num">52.50</td><td class="num">55.59</td><td class="num">80.1</td><td class="num">27.2</td><td class="num">83.6</td><td class="num">34.0</td></tr>
+      <tr><td>TimesFM</td><td class="num">60.61</td><td class="num">74.34</td><td class="num">72.32</td><td class="num">73.1</td><td class="num">41.9</td><td class="num">90.3</td><td class="num">49.2</td></tr>
+      <tr><td>PatchTST</td><td class="num">74.50</td><td class="num">83.07</td><td class="num">79.62</td><td class="num">87.3</td><td class="num">52.1</td><td class="num">87.7</td><td class="num">57.2</td></tr>
+      <tr class="bench"><td>AEMO pre-dispatch</td><td class="num">82.25</td><td class="num">145.20</td><td class="num">143.47</td><td class="num">104.9</td><td class="num">55.3</td><td class="num">105.1</td><td class="num">117.1</td></tr>
+    </tbody>
+  </table>
+  <p><b>Reading it.</b> Three findings survive the tables. First, anything that ingests the pre-dispatch forecast beats anything that does not, by 20 to 50 points of nMAPE; the architecture choice among the covariate-aware models is worth only 1 to 5 points. Second, the decoder-only model, which is essentially "learn a nonlinear correction to AEMO's forecast and the weather forecast", is the best or joint best in two of three regions. Third, spike windows are still bad for everyone: 70 to 88 % nMAPE against 24 to 29 % on normal windows, and the paper says the models time spikes but underestimate their size. Every model beats AEMO on the Diebold-Mariano test at 95 % (statistics from −4.0 to −7.1). AEMO pre-dispatch is not a statistical forecast by design; it is a dispatch-engine output that changes with every rebid, so its nMAPE above 100 % at 8 h or more mostly reflects transient A$15,000 to A$20,000 prints.</p>
+
+  <h4>Architecture: the encoder-decoder transformer (Figure 3) and the five variants (Figure 4)</h4>
+  <div class="diagram"><div id="d-sinclair"></div>
+    <div class="legend"><span class="li">input</span><span class="lm">learned model</span><span class="lo">output</span></div>
+    <div class="cap">Parallel decoding means all 32 future half-hours are predicted in one forward pass. The autoregressive variants feed each predicted step back in as input for the next, which was slower and slightly worse here.</div>
+  </div>
+  <div class="diagram"><div id="d-variants"></div>
+    <div class="cap">The five variants tested. Grey-out shows what each variant cannot see. Decoder-only drops the 48-hour history entirely and still wins in NSW and QLD, because AEMO's pre-dispatch already summarises the state of the system.</div>
+  </div>
+  <div class="diagram"><div id="d-baselines"></div>
+    <div class="cap">The comparison models (Figure 5 in the paper). TFT and the LSTM see the same future covariates as the transformers; PatchTST and TimesFM see only the past, and TimesFM sees only the price.</div>
+  </div>
+  <h4>Walk one forecast through the decoder-only model</h4>
+  <ol class="steps">
+    <li>It is 16:00. Collect the 32 rows for 16:30 to 08:00 tomorrow: for each, AEMO's pre-dispatch RRP and demand for NSW and the other regions, the forecast interchange, the Open-Meteo forecast temperature, cloud, humidity and wind for Sydney, the workday flag, the half-hour / weekday / month sines and cosines, and hours-to-delivery. Scale each column with the quantile transformer fitted on the training years.</li>
+    <li>Project each row to 128 numbers and add the positional encoding. Run three transformer layers: in each, every future row attends to every other future row (so the 18:00 row can see that pre-dispatch expects a ramp from 17:00 and a fall by 20:00), then a feed-forward network adjusts each row.</li>
+    <li>Layer-normalise and apply one linear layer per row: 32 prices out, in scaled units; invert the scaler. The 2 h entry in the table is row 4 (18:00), the 16 h entry is row 32.</li>
+    <li>Half an hour later, at 16:30, do it again with the new pre-dispatch run. Over 9,858 such origins in the test period, the average |actual − predicted| at row 4 divided by the average price was 33.6 %; for AEMO's own row-4 number it was 65.6 %.</li>
+  </ol>
+  <details><summary>Sources</summary><div class="src">
+    <a href="https://doi.org/10.3390/app16010075">doi 10.3390/app16010075</a> (open access, all tables read directly) ·
+    <a href="https://www.kaggle.com/datasets/markwsinclair/nempricesweather2022to2025">Kaggle dataset</a> ·
+    <a href="https://nem.redaxe.com">Live forecast API</a>
+  </div></details>
+</div>
+
+<h2 id="excluded"><span class="part-label">Directory</span>What was left out, and why</h2>
+<ul>
+  <li><b>Kang &amp; Wang 2025, "A Transformer-Based Framework for Explainable Electricity Market Dynamics" (CMSS 2025)</b>, reference 22 in Sinclair. Its inputs are price, sales volume, revenue and customer count, which is a retail-tariff dataset, not the NEM. Excluded.</li>
+  <li><b>Gong (MCPformer, China), Han &amp; Wang (PJM), the Spanish GNN paper, Bottieau (Belgium), Cantillo-Luna (Colombia), Abdellatif (Nord Pool), Xu (VMD-TCN-GRU)</b>: not Australian markets. Excluded by the brief.</li>
+  <li><b>Not cited by Sinclair but directly relevant</b>: "Deep Time-Series Models Meet Volatility: Multi-Horizon Electricity Price Forecasting in the Australian NEM" (arXiv 2602.01157, Feb 2026) benchmarks LSTM, CNN-LSTM and Transformer against newer time-series architectures across all five regions and finds the simple LSTM / CNN-LSTM often win; and "NSW-EPNews" (arXiv 2506.11050) tests LLMs with news text on NSW prices and finds they do not beat classical baselines. Both are worth reading beside Liu 2024 and Sinclair 2026.</li>
+</ul>
+<p class="small">Compiled 21 September 2026. Companion page: <a href="rnn_explainer.html">LSTM, GRU and TCN: a worked numerical walkthrough</a>.</p>
+
+</main>
+
+<script>
+(function(){
+  'use strict';
+  // ============================================================ helpers
+  function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function fmt(x,d){ if(typeof x!=='number') return x; return (Math.round(x*Math.pow(10,d))/Math.pow(10,d)).toFixed(d); }
+  function list(a,d){ return '[' + a.map(function(v){return fmt(v,d);}).join(', ') + ']'; }
+  function mean(a){ return a.reduce(function(s,v){return s+v;},0)/a.length; }
+  function sd(a){ var m=mean(a); return Math.sqrt(mean(a.map(function(v){return (v-m)*(v-m);}))); }
+  function corr(a,b){ var ma=mean(a),mb=mean(b),n=0,da=0,db=0; for(var i=0;i<a.length;i++){n+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)*(a[i]-ma);db+=(b[i]-mb)*(b[i]-mb);} return n/Math.sqrt(da*db); }
+  function softmax(s){ var m=Math.max.apply(null,s); var e=s.map(function(v){return Math.exp(v-m);}); var t=e.reduce(function(a,b){return a+b;},0); return e.map(function(v){return v/t;}); }
+  function solveLS(H,y,lam){ // normal equations with ridge lam, Gaussian elimination
+    var n=H.length,p=H[0].length,A=[],b=[];
+    for(var i=0;i<p;i++){A.push([]);b.push(0);for(var j=0;j<p;j++){var s=0;for(var k=0;k<n;k++)s+=H[k][i]*H[k][j];A[i].push(s+(i===j?lam:0));}for(var k2=0;k2<n;k2++)b[i]+=H[k2][i]*y[k2];}
+    for(var c=0;c<p;c++){var piv=c;for(var r=c+1;r<p;r++)if(Math.abs(A[r][c])>Math.abs(A[piv][c]))piv=r;var tmp=A[c];A[c]=A[piv];A[piv]=tmp;var tb=b[c];b[c]=b[piv];b[piv]=tb;for(var r2=c+1;r2<p;r2++){var f=A[r2][c]/A[c][c];for(var cc=c;cc<p;cc++)A[r2][cc]-=f*A[c][cc];b[r2]-=f*b[c];}}
+    var x=new Array(p);for(var i2=p-1;i2>=0;i2--){var s2=b[i2];for(var j2=i2+1;j2<p;j2++)s2-=A[i2][j2]*x[j2];x[i2]=s2/A[i2][i2];}return x;
+  }
+  var V={};
+  function setV(k,v){V[k]=v;}
+  function fillV(){ document.querySelectorAll('[data-v]').forEach(function(el){ var k=el.getAttribute('data-v'); if(k in V) el.textContent=V[k]; else el.textContent='?'; }); }
+  function table(id, head, rows){ var el=document.getElementById(id); if(!el)return; var s='<table class="ex"><thead><tr>'+head.map(function(h){return '<th class="num">'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'; rows.forEach(function(r){ s+='<tr>'+r.map(function(c){return '<td class="num">'+esc(c)+'</td>';}).join('')+'</tr>'; }); el.innerHTML=s+'</tbody></table>'; }
+
+  // ============================================================ worked examples
+  // --- metrics on the six-row series
+  var Y=[60,80,120,300,90,70], F=[65,75,110,220,95,75];
+  var E=Y.map(function(y,i){return y-F[i];});
+  var absE=E.map(Math.abs), sqE=E.map(function(e){return e*e;});
+  var MAE=mean(absE), MSE=mean(sqE), RMSE=Math.sqrt(MSE);
+  var ape=absE.map(function(e,i){return e/Math.abs(Y[i]);});
+  var MAPE=100*mean(ape), RMSPE=100*Math.sqrt(mean(E.map(function(e,i){return (e/Y[i])*(e/Y[i]);})));
+  var ybar=mean(Y), fbar=mean(F), nMAPE=100*MAE/ybar;
+  var r=corr(Y,F), alpha=sd(F)/sd(Y), beta=fbar/ybar, kgedist=Math.sqrt((r-1)*(r-1)+(alpha-1)*(alpha-1)+(beta-1)*(beta-1)), KGE=1-kgedist;
+  table('t-errors',['Half-hour','Actual y (A$/MWh)','Forecast ŷ','Error e = y − ŷ'],Y.map(function(y,i){return ['17:'+(i<2?'00':'30').slice(0,2)+'', y, F[i], E[i]];}).map(function(row,i){ var times=['17:00','17:30','18:00','18:30','19:00','19:30']; row[0]=times[i]; return row; }));
+  setV('m.abse',list(absE,0)); setV('m.mae',fmt(MAE,2)); setV('m.sqe',list(sqE,0)); setV('m.mse',fmt(MSE,1)); setV('m.rmse',fmt(RMSE,2)); setV('m.rmseratio',fmt(RMSE/MAE,2));
+  setV('m.ape',list(ape,3)); setV('m.mape',fmt(MAPE,1)); setV('m.rmspe',fmt(RMSPE,1)); setV('m.ybar',fmt(ybar,1)); setV('m.nmape',fmt(nMAPE,1)); setV('m.fbar',fmt(fbar,1));
+  // near-zero variant: replace last row with actual 1, forecast 6
+  var Y0=Y.slice(0,5).concat([1]), F0=F.slice(0,5).concat([6]); var E0=Y0.map(function(y,i){return y-F0[i];});
+  setV('m.mape_zero',fmt(100*mean(E0.map(function(e,i){return Math.abs(e)/Math.abs(Y0[i]);})),0)); setV('m.nmape_zero',fmt(100*mean(E0.map(Math.abs))/mean(Y0),1));
+  setV('m.r',fmt(r,3)); setV('m.r2',fmt(r*r,3)); setV('m.r_half',fmt(corr(Y,F.map(function(v){return v/2;})),3));
+  setV('m.sdy',fmt(sd(Y),1)); setV('m.sdf',fmt(sd(F),1)); setV('m.alpha',fmt(alpha,3)); setV('m.alphapct',fmt(100*alpha,0)); setV('m.beta',fmt(beta,3)); setV('m.kgedist',fmt(kgedist,3)); setV('m.kge',fmt(KGE,3));
+  // RevIN
+  var z=Y.map(function(v){return (v-ybar)/sd(Y);}); setV('rv.z',list(z,2)); setV('rv.back',fmt(0.5*sd(Y)+ybar,1));
+  // --- DM test
+  var A=[10,30,5,120,20,15,8,25], B=[12,25,9,90,30,10,14,20]; var D=A.map(function(a,i){return a-B[i];}); var dm=mean(D), dsd=Math.sqrt(D.map(function(d){return (d-dm)*(d-dm);}).reduce(function(a,b){return a+b;},0)/(D.length-1)), dse=dsd/Math.sqrt(D.length);
+  setV('dm.a',list(A,0)); setV('dm.b',list(B,0)); setV('dm.d',list(D,0)); setV('dm.mean',fmt(dm,2)); setV('dm.sd',fmt(dsd,2)); setV('dm.se',fmt(dse,2)); setV('dm.stat',fmt(dm/dse,2));
+  // --- neuron
+  var s=0.3*1.2+0.8*1.5-0.2; setV('nn.sum',fmt(s,2)); setV('nn.relu',fmt(Math.max(0,s),2)); setV('nn.tanh',fmt(Math.tanh(s),3)); setV('nn.sig',fmt(1/(1+Math.exp(-s)),3)); setV('nn.out',fmt(100*Math.max(0,s),0));
+  // --- pinball
+  setV('pin.low',fmt(0.9*20,0)); setV('pin.high',fmt(0.1*20,0));
+  // --- CNN
+  var cx=[60,62,65,80,120,200,150,90], ck=[-1,0,1], cy=[]; for(var i=1;i<cx.length-1;i++) cy.push(ck[0]*cx[i-1]+ck[1]*cx[i]+ck[2]*cx[i+1]);
+  var crelu=cy.map(function(v){return Math.max(0,v);}); var cpool=[]; for(var j=0;j<crelu.length;j+=2) cpool.push(Math.max(crelu[j],crelu[j+1]!==undefined?crelu[j+1]:-Infinity));
+  setV('cnn.x',list(cx,0)); setV('cnn.y',list(cy,0)); setV('cnn.relu',list(crelu,0)); setV('cnn.pool',list(cpool,0));
+  // --- LSTM
+  var c1=0.9*0.6, c2=0.5*0.8, c=c1+c2, h=0.7*Math.tanh(c); setV('lstm.c1',fmt(c1,2)); setV('lstm.c2',fmt(c2,2)); setV('lstm.c',fmt(c,2)); setV('lstm.tanhc',fmt(Math.tanh(c),3)); setV('lstm.h',fmt(h,3)); setV('lstm.calt',fmt(0.1*0.6+0.4,2));
+  // --- autoencoder
+  var noise=[3,-4,6,-9,2,-3]; setV('ae.noisy',list(Y.map(function(v,i){return v+noise[i];}),0)); setV('ae.clean',list(Y,0));
+  // --- RVFL
+  var rx=[0.5,0.7,0.9,1.2,1.6,2.2,3.0,0.8], ry=[0.6,0.75,1.0,1.4,1.5,1.9,2.4,0.9]; var w1=1.3,b1=-1.6,w2=-0.9,b2=1.2;
+  var H=rx.map(function(x){return [1,x,Math.tanh(w1*x+b1),Math.tanh(w2*x+b2)];}); var beta_=solveLS(H,ry,0.01); var fit=H.map(function(row){return row.reduce(function(s,v,i){return s+v*beta_[i];},0);});
+  var rmae=mean(fit.map(function(f,i){return Math.abs(f-ry[i]);}));
+  table('t-rvfl',['Row','x (price now ÷100)','tanh(w₁x+b₁)','tanh(w₂x+b₂)','target y','fitted ŷ'],rx.map(function(x,i){return [i+1,fmt(x,2),fmt(H[i][2],3),fmt(H[i][3],3),fmt(ry[i],2),fmt(fit[i],2)];}));
+  setV('rvfl.w1',w1); setV('rvfl.b1',b1); setV('rvfl.w2',w2); setV('rvfl.b2',b2); setV('rvfl.beta',list(beta_,2)); setV('rvfl.mae',fmt(rmae,3)); setV('rvfl.mae100',fmt(100*rmae,0));
+  // --- softmax
+  var ss=[2,1,0.1], se=ss.map(Math.exp), sw=softmax(ss); setV('sm.exp',list(se,3)); setV('sm.sum',fmt(se.reduce(function(a,b){return a+b;},0),3)); setV('sm.w',list(sw,3)); setV('sm.w3',list(softmax(ss.map(function(v){return 3*v;})),3));
+  // --- attention
+  var q=[1.0,0.5], K=[[0.9,0.6],[0.7,0.2],[-0.8,0.3]], Vv=[2.6,1.4,0.4]; var sc=K.map(function(k){return (q[0]*k[0]+q[1]*k[1])/Math.sqrt(2);}); var aw=softmax(sc); var ao=aw.reduce(function(s,w,i){return s+w*Vv[i];},0);
+  setV('at.q',list(q,1)); setV('at.k1',list(K[0],1)); setV('at.k2',list(K[1],1)); setV('at.k3',list(K[2],1)); setV('at.v',list(Vv,1)); setV('at.s',list(sc,3)); setV('at.w',list(aw,3)); setV('at.out',fmt(ao,3)); setV('at.out100',fmt(100*ao,0));
+  // --- patches, lora
+  setV('pt.n',(96-24)/6+1); var full=4096*4096, lora=2*4096*8; setV('lora.full',full.toLocaleString()); setV('lora.lora',lora.toLocaleString()); setV('lora.pct',fmt(100*lora/full,2));
+  // --- RL toy
+  var P=[50,300,40], Fc=[50,45,140]; setV('rl.p',list(P,0)); setV('rl.f',list(Fc,0)); setV('rl.buy','interval 1 (A$50)'); setV('rl.sell','interval 2 (A$300)'); setV('rl.pio',fmt(P[1]-P[0],0)); setV('rl.fpred',fmt(Fc[2]-Fc[1],0)); setV('rl.fact',fmt(P[2]-P[1],0));
+  // --- covariate table
+  (function(){ var el=document.getElementById('t-cov'); if(!el)return; var rows=[
+    ['RRP (price)','yes, 48 h','no: this is the target','the target'],
+    ['Demand','yes','yes: AEMO pre-dispatch demand','future known'],
+    ['Net interchange','yes','yes: pre-dispatch flows','future known'],
+    ['Temperature, cloud, humidity, wind','yes (observed)','yes: Open-Meteo forecast','future known'],
+    ['Workday, half-hour / weekday / month sin-cos','yes','yes (calendar is known)','future known'],
+    ['Hours to delivery','n/a','yes','future known'],
+    ['AEMO pre-dispatch RRP, all regions','yes (past runs)','yes: the current run','future known, dominant']];
+    var s='<table><thead><tr><th>Variable</th><th>Available for the past 96 steps (encoder)?</th><th>Available for the next 32 steps (decoder)?</th><th>Kind</th></tr></thead><tbody>'; rows.forEach(function(r){s+='<tr>'+r.map(function(c){return '<td>'+esc(c)+'</td>';}).join('')+'</tr>';}); el.innerHTML=s+'</tbody></table>'; })();
+  // --- Haar wavelet
+  var hx=[60,70,65,75,300,80,70,60]; var a1=[],d1=[]; for(var i3=0;i3<hx.length;i3+=2){a1.push((hx[i3]+hx[i3+1])/2);d1.push((hx[i3]-hx[i3+1])/2);} var a2=[],d2=[]; for(var i4=0;i4<a1.length;i4+=2){a2.push((a1[i4]+a1[i4+1])/2);d2.push((a1[i4]-a1[i4+1])/2);}
+  var ma1=hx.map(function(v,i){var prev=hx[(i-1+hx.length)%hx.length];return (v+prev)/2;}), md1=hx.map(function(v,i){var prev=hx[(i-1+hx.length)%hx.length];return (v-prev)/2;});
+  setV('hw.x',list(hx,0)); setV('hw.a1',list(a1,1)); setV('hw.d1',list(d1,1)); setV('hw.a2',list(a2,2)); setV('hw.d2',list(d2,2)); setV('hw.ma1',list(ma1,1)); setV('hw.md1',list(md1,1));
+  fillV();
+
+  // ============================================================ diagram helpers
+  function flow(id, steps, opt){
+    var el=document.getElementById(id); if(!el) return;
+    opt = opt || {};
+    var W = opt.w || 168, Hh = opt.h || 60, GAP = opt.gap || 42, PGAP = 10, PAD = 12;
+    var cols = steps.map(function(st){ return st.par ? st.par : [st]; });
+    var maxRows = Math.max.apply(null, cols.map(function(c){return c.length;}));
+    var totalH = maxRows*Hh + (maxRows-1)*PGAP + 2*PAD + (opt.extraH||0);
+    var totalW = cols.length*W + (cols.length-1)*GAP + 2*PAD;
+    var s = '<svg viewBox="0 0 '+totalW+' '+totalH+'" width="'+totalW+'" height="'+totalH+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">';
+    s += '<defs><marker id="ah'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>';
+    var centers = [];
+    cols.forEach(function(col, ci){
+      var colH = col.length*Hh + (col.length-1)*PGAP;
+      var y0 = PAD + (maxRows*Hh + (maxRows-1)*PGAP - colH)/2;
+      var x = PAD + ci*(W+GAP);
+      var cs = [];
+      col.forEach(function(n, ri){
+        var y = y0 + ri*(Hh+PGAP);
+        var cls = 'box-'+(n.k||'model');
+        s += '<rect x="'+x+'" y="'+y+'" width="'+W+'" height="'+Hh+'" rx="8" class="'+cls+'" stroke="rgba(0,0,0,.18)"'+(n.dash?' stroke-dasharray="4 3"':'')+(n.grey?' opacity="0.35"':'')+'/>';
+        var lines = n.s || [];
+        var ty = y + 18;
+        s += '<text x="'+(x+W/2)+'" y="'+ty+'" text-anchor="middle" class="ti">'+esc(n.t)+'</text>';
+        lines.forEach(function(l,i){ s += '<text x="'+(x+W/2)+'" y="'+(ty+14*(i+1))+'" text-anchor="middle" class="ts">'+esc(l)+'</text>'; });
+        cs.push({x:x, y:y+Hh/2, r:x+W});
+      });
+      centers.push(cs);
+    });
+    for (var i=0;i<centers.length-1;i++){
+      centers[i].forEach(function(a){ centers[i+1].forEach(function(b){
+        var x1=a.r, y1=a.y, x2=b.x-2, y2=b.y, mx=(x1+x2)/2;
+        s += '<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#6b7280" stroke-width="1.4" marker-end="url(#ah'+id+')"/>';
+      });});
+    }
+    if (opt.extra) s += opt.extra(totalW,totalH,centers);
+    s += '</svg>';
+    el.innerHTML = s;
+  }
+  function svg(id, w, h, body){ var el=document.getElementById(id); if(!el)return; el.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;display:block;margin:6px auto"><defs><marker id="ah-'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>'+body+'</svg>'; }
+  function arr(id){ return 'marker-end="url(#ah-'+id+')"'; }
+  function series(n, f){ var a=[]; for(var i=0;i<n;i++) a.push(f(i)); return a; }
+  function path(pts, x0, y0, dx, sy, stroke, w){ var d=pts.map(function(v,i){return (i?'L':'M')+(x0+i*dx)+' '+(y0-v*sy);}).join(' '); return '<path d="'+d+'" fill="none" stroke="'+stroke+'" stroke-width="'+(w||1.6)+'"/>'; }
+  function txt(x,y,t,cls,anchor,extra){ return '<text x="'+x+'" y="'+y+'" class="'+(cls||'ts')+'" text-anchor="'+(anchor||'start')+'" '+(extra||'')+'>'+esc(t)+'</text>'; }
+  function blk(x,y,w,h,cls,t,s){ return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="8" class="'+cls+'" stroke="rgba(0,0,0,.18)"/>'+txt(x+w/2,y+(s?20:h/2+4),t,'ti','middle')+(s?txt(x+w/2,y+36,s,'ts','middle'):''); }
+
+  // ============================================================ Part 1 diagrams
+  // setup
+  (function(){ var b='', x0=20, y=70, cw=36; var labels=['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
+    for(var i=0;i<8;i++){ var x=x0+i*(cw+6); var past=i<4; b+='<rect x="'+x+'" y="'+y+'" width="'+cw+'" height="30" rx="5" class="'+(past?'box-input':'box-out')+'" stroke="rgba(0,0,0,.15)"'+(past?'':' opacity="0.5"')+'/>'; b+=txt(x+cw/2,y+19,labels[i],'ts','middle'); }
+    b+='<line x1="'+(x0+4*(cw+6)-3)+'" y1="40" x2="'+(x0+4*(cw+6)-3)+'" y2="180" stroke="#6d5bd0" stroke-width="2" stroke-dasharray="5 3"/>'; b+=txt(x0+4*(cw+6)-3,34,'forecast origin: now (16:00)','ts','middle','fill="#5b21b6"');
+    b+=txt(x0+2*(cw+6),60,'lags: past prices (known)','ts','middle'); b+=txt(x0+6*(cw+6),60,'targets: unknown prices','ts','middle');
+    for(var j=4;j<8;j++){ var x2=x0+j*(cw+6); b+='<rect x="'+x2+'" y="115" width="'+cw+'" height="30" rx="5" class="box-input" stroke="rgba(0,0,0,.15)"/>'; b+=txt(x2+cw/2,134,'PD','ts','middle'); }
+    b+=txt(x0+6*(cw+6)-30,165,'known-future covariates (pre-dispatch, weather fc, calendar)','ts','middle');
+    for(var k=0;k<4;k++){ var x3=x0+k*(cw+6); b+='<rect x="'+x3+'" y="115" width="'+cw+'" height="30" rx="5" class="box-input" stroke="rgba(0,0,0,.15)"/>'; b+=txt(x3+cw/2,134,'obs','ts','middle'); }
+    b+=txt(x0+2*(cw+6)+20,165,'past covariates (observed weather, demand)','ts','middle');
+    svg('d-setup',420,185,b); })();
+  // split
+  (function(){ var b='', x0=20, W=560; var tr=0.75, va=0.05;
+    b+='<rect x="'+x0+'" y="20" width="'+(W*tr)+'" height="26" class="box-model"/>'+txt(x0+W*tr/2,37,'train 37,085 (Nov 2022 → ~Dec 2024)','ts','middle');
+    b+='<rect x="'+(x0+W*tr)+'" y="20" width="'+(W*va)+'" height="26" class="box-prep"/>'+txt(x0+W*tr+W*va/2,37,'val','ts','middle');
+    b+='<rect x="'+(x0+W*(tr+va))+'" y="20" width="'+(W*(1-tr-va))+'" height="26" class="box-out"/>'+txt(x0+W*(tr+va)+W*(1-tr-va)/2,37,'test 9,858','ts','middle');
+    b+=txt(x0,66,'walk-forward folds used to choose hyperparameters:','ts');
+    for(var f=0;f<5;f++){ var y=76+f*20; var end=W*tr*(0.45+0.11*f); b+='<rect x="'+x0+'" y="'+y+'" width="'+end+'" height="14" class="box-model" opacity="0.8"/>'; b+='<rect x="'+(x0+end)+'" y="'+y+'" width="'+(W*tr*0.11)+'" height="14" class="box-prep"/>'; b+=txt(x0+end+W*tr*0.11+6,y+11,'fold '+(f+1),'ts'); }
+    svg('d-split',600,185,b); })();
+  // leak
+  (function(){ var n=30, x0=20, y0=80, dx=11; var sig=series(n,function(i){return 0.5+0.35*Math.sin(i/3)+(i===18?0.9:0);}); var b=path(sig,x0,y0,dx,50,'#1f2937',1.6);
+    var t=12; b+='<rect x="'+(x0+(t-2)*dx-4)+'" y="20" width="'+(5*dx)+'" height="80" rx="6" fill="rgba(109,91,208,.15)" stroke="#6d5bd0"/>';
+    b+='<line x1="'+(x0+t*dx)+'" y1="20" x2="'+(x0+t*dx)+'" y2="110" stroke="#b91c1c" stroke-width="1.5" stroke-dasharray="4 3"/>'; b+=txt(x0+t*dx,120,'t (forecast origin)','ts','middle','fill="#991b1b"');
+    b+=txt(x0+t*dx+3*dx,16,'t+1, t+2 used by the filter','ts','middle','fill="#5b21b6"'); b+=txt(x0,140,'smoothed(t) = mean(x[t−2] … x[t+2]) → the input already knows the future','ts');
+    svg('d-leak',400,150,b); })();
+  // KGE 3D-ish
+  (function(){ var b=''; var ox=60, oy=150; b+='<line x1="'+ox+'" y1="'+oy+'" x2="'+(ox+220)+'" y2="'+oy+'" stroke="#9ca3af"/>'+txt(ox+225,oy+4,'r','ts'); b+='<line x1="'+ox+'" y1="'+oy+'" x2="'+ox+'" y2="'+(oy-120)+'" stroke="#9ca3af"/>'+txt(ox-4,oy-125,'α','ts','end'); b+='<line x1="'+ox+'" y1="'+oy+'" x2="'+(ox-40)+'" y2="'+(oy+40)+'" stroke="#9ca3af"/>'+txt(ox-30,oy+38,'β','ts','end');
+    b+='<circle cx="'+(ox+200)+'" cy="'+(oy-100)+'" r="6" fill="#15803d"/>'+txt(ox+200,oy-110,'perfect (1, 1, 1)','ts','middle','fill="#166534"');
+    var px=ox+200*r, py=oy-100*alpha+ (1-beta)*40; b+='<circle cx="'+px+'" cy="'+py+'" r="6" fill="#6d5bd0"/>'+txt(px,py+18,'example ('+fmt(r,2)+', '+fmt(alpha,2)+', '+fmt(beta,2)+')','ts','middle','fill="#5b21b6"');
+    b+='<line x1="'+px+'" y1="'+py+'" x2="'+(ox+200)+'" y2="'+(oy-100)+'" stroke="#6d5bd0" stroke-dasharray="4 3"/>'; b+=txt(ox+120,oy+30,'KGE = 1 − length of the dashed line = '+fmt(KGE,3),'ts','middle');
+    svg('d-kge',330,200,b); })();
+
+  // ============================================================ Part 2 diagrams
+  (function(){ var b=''; // neuron
+    var ins=['x₁ = 1.2','x₂ = 1.5']; ins.forEach(function(t,i){ var y=50+i*40; b+='<circle cx="30" cy="'+y+'" r="8" fill="#93c5fd"/>'+txt(30,y-14,t,'ts','middle'); b+='<line x1="38" y1="'+y+'" x2="110" y2="70" stroke="#6b7280"/>'+txt(72,y+(i?14:-6),'w = '+(i?0.8:0.3),'ts','middle'); });
+    b+='<circle cx="120" cy="70" r="14" fill="#c4b5fd"/>'+txt(120,74,'Σ','ti','middle'); b+=txt(120,100,'+ b = −0.2','ts','middle'); b+='<path d="M134 70 L170 70" stroke="#6b7280" '+arr('d-neuron')+'/>'; b+='<rect x="172" y="56" width="52" height="28" rx="6" class="box-model"/>'+txt(198,74,'ReLU','ts','middle'); b+='<path d="M224 70 L255 70" stroke="#6b7280" '+arr('d-neuron')+'/>'+txt(262,74,'out '+fmt(Math.max(0,s),2),'ts');
+    // small MLP
+    var L=[3,4,1], xs=[360,430,500]; L.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=70+(i-(n-1)/2)*24; if(li<L.length-1) for(var j=0;j<L[li+1];j++){ var y2=70+(j-(L[li+1]-1)/2)*24; b+='<line x1="'+xs[li]+'" y1="'+y+'" x2="'+xs[li+1]+'" y2="'+y2+'" stroke="#e5e7eb"/>'; } } });
+    L.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=70+(i-(n-1)/2)*24; b+='<circle cx="'+xs[li]+'" cy="'+y+'" r="7" fill="'+(li===0?'#93c5fd':li===2?'#86efac':'#c4b5fd')+'"/>'; } });
+    b+=txt(360,130,'inputs','ts','middle'); b+=txt(430,130,'hidden layer','ts','middle'); b+=txt(500,130,'output','ts','middle');
+    svg('d-neuron',540,140,b); })();
+  (function(){ var n=60, x0=30, y0=130, dx=5; var loss=series(n,function(i){var u=(i-38)/14; return 0.15+u*u*0.3;}); var b=path(loss,x0,y0,dx,50,'#1f2937',1.8);
+    var pts=[8,16,23,29,33,36]; pts.forEach(function(p,i){ b+='<circle cx="'+(x0+p*dx)+'" cy="'+(y0-loss[p]*50)+'" r="4" fill="#6d5bd0"/>'; if(i<pts.length-1) b+='<path d="M'+(x0+p*dx)+' '+(y0-loss[p]*50)+' L'+(x0+pts[i+1]*dx)+' '+(y0-loss[pts[i+1]]*50)+'" stroke="#6d5bd0" stroke-width="1.4" '+arr('d-gd')+'/>'; });
+    b+=txt(x0,150,'weight value →','ts'); b+=txt(x0,20,'loss','ts'); b+=txt(x0+8*dx,y0-loss[8]*50-10,'start','ts','middle'); b+=txt(x0+38*dx,y0-loss[38]*50+16,'minimum','ts','middle');
+    svg('d-gd',340,160,b); })();
+  (function(){ var n=81, x0=40, y0=140, dx=3.5, sy=40; var xs=series(n,function(i){return (i-40)/13;});
+    var mse=xs.map(function(u){return u*u;}), mae=xs.map(function(u){return Math.abs(u);}), hub=xs.map(function(u){var d=0.8; return Math.abs(u)<=d?0.5*u*u:d*(Math.abs(u)-0.5*d);});
+    var b=path(mse.map(function(v){return Math.min(v,3.2);}),x0,y0,dx,sy,'#b91c1c')+path(mae,x0,y0,dx,sy,'#2563eb')+path(hub,x0,y0,dx,sy,'#15803d',2);
+    b+='<line x1="'+(x0+40*dx)+'" y1="'+y0+'" x2="'+(x0+40*dx)+'" y2="10" stroke="#e5e7eb"/>'; b+=txt(x0+40*dx,155,'miss (scaled units) →','ts','middle');
+    b+=txt(x0+70*dx,y0-3.2*sy+4,'MSE (squared)','ts','start','fill="#b91c1c"'); b+=txt(x0+70*dx,y0-mae[70]*sy-6,'MAE','ts','start','fill="#2563eb"'); b+=txt(x0+70*dx,y0-hub[70]*sy+14,'Huber δ=0.8','ts','start','fill="#15803d"');
+    svg('d-loss',360,165,b); })();
+  (function(){ var b='';
+    for(var i=0;i<6;i++){ var off=(i===1||i===4); b+='<circle cx="'+(30+i*22)+'" cy="50" r="8" fill="'+(off?'#e5e7eb':'#c4b5fd')+'" stroke="'+(off?'#9ca3af':'none')+'"/>'; if(off) b+='<line x1="'+(30+i*22-5)+'" y1="45" x2="'+(30+i*22+5)+'" y2="55" stroke="#9ca3af"/>'; }
+    b+=txt(85,80,'dropout: random units off','ts','middle');
+    var vals=[3,9,1,5]; var m=mean(vals), sdv=sd(vals); vals.forEach(function(v,i){ b+='<rect x="'+(200+i*22)+'" y="'+(70-v*5)+'" width="16" height="'+(v*5)+'" fill="#93c5fd"/>'; b+='<rect x="'+(300+i*22)+'" y="'+(50-((v-m)/sdv)*10)+'" width="16" height="'+(Math.abs((v-m)/sdv)*10)+'" fill="#c4b5fd" transform="'+(((v-m)/sdv)<0?'translate(0,'+(((v-m)/sdv)*10)+')':'')+'"/>'; });
+    b+='<path d="M275 50 L295 50" stroke="#6b7280" '+arr('d-reg')+'/>'; b+=txt(290,80,'LayerNorm: (x − mean) / sd','ts','middle');
+    b+=blk(430,36,90,30,'box-model','block'); b+='<path d="M400 51 L430 51" stroke="#6b7280"/><path d="M520 51 L560 51" stroke="#6b7280" '+arr('d-reg')+'/>'; b+='<path d="M410 51 C410 10 545 10 545 51" fill="none" stroke="#6d5bd0" stroke-width="1.6"/>'; b+='<circle cx="545" cy="51" r="6" fill="#fff" stroke="#6d5bd0"/>'+txt(545,55,'+','ts','middle'); b+=txt(480,80,'residual: out = x + block(x)','ts','middle');
+    svg('d-reg',580,90,b); })();
+  (function(){ var b=''; var x0=20,y0=110,bw=16,gap=6; cx.forEach(function(v,i){ b+='<rect x="'+(x0+i*(bw+gap))+'" y="'+(y0-v*0.4)+'" width="'+bw+'" height="'+(v*0.4)+'" fill="#93c5fd"/>'; b+=txt(x0+i*(bw+gap)+bw/2,y0+12,v,'ts','middle'); });
+    b+='<rect x="'+(x0+0*(bw+gap)-3)+'" y="20" width="'+(3*(bw+gap)-gap+6)+'" height="96" rx="4" fill="none" stroke="#6d5bd0" stroke-width="2"/>'; b+=txt(x0+1*(bw+gap)+bw/2,14,'(−1, 0, +1)','ts','middle','fill="#5b21b6"');
+    b+='<rect x="'+(x0+3*(bw+gap)-3)+'" y="20" width="'+(3*(bw+gap)-gap+6)+'" height="96" rx="4" fill="none" stroke="#6d5bd0" stroke-width="2" stroke-dasharray="4 3"/>';
+    b+='<path d="M'+(x0+1*(bw+gap)+bw/2)+' 122 L'+(x0+1*(bw+gap)+bw/2)+' 150" stroke="#6b7280" '+arr('d-cnn')+'/>';
+    cy.forEach(function(v,i){ var x=x0+(i+1)*(bw+gap); b+='<rect x="'+x+'" y="'+(v>=0?190-v*0.5:190)+'" width="'+bw+'" height="'+(Math.abs(v)*0.5)+'" fill="'+(v>=0?'#c4b5fd':'#fecaca')+'"/>'; b+=txt(x+bw/2,262,v,'ts','middle'); });
+    b+=txt(x0,140,'output = −x[i−1] + 0·x[i] + x[i+1]','ts'); b+=txt(x0,280,'ReLU keeps the purple bars, zeroes the red one','ts');
+    svg('d-cnn',260,290,b); })();
+  (function(){ var b=''; b+='<rect x="60" y="30" width="260" height="120" rx="12" fill="#f5f3ff" stroke="#c4b5fd"/>';
+    b+='<line x1="10" y1="55" x2="60" y2="55" stroke="#d97706" stroke-width="3"/><line x1="320" y1="55" x2="370" y2="55" stroke="#d97706" stroke-width="3" '+arr('d-lstm')+'/>'; b+=txt(10,48,'c(t−1)','ts'); b+=txt(340,48,'c(t)','ts');
+    b+='<line x1="60" y1="55" x2="320" y2="55" stroke="#d97706" stroke-width="3"/>';
+    b+='<circle cx="120" cy="55" r="11" fill="#fff" stroke="#d97706"/>'+txt(120,59,'×','ti','middle'); b+='<circle cx="220" cy="55" r="11" fill="#fff" stroke="#d97706"/>'+txt(220,59,'+','ti','middle');
+    b+=blk(95,90,50,26,'box-model','f'); b+=blk(160,90,50,26,'box-model','i'); b+=blk(225,90,50,26,'box-model','c̃'); b+=blk(290,90,26,26,'box-model','o');
+    b+='<line x1="120" y1="90" x2="120" y2="66" stroke="#6b7280" '+arr('d-lstm')+'/>'; b+='<line x1="185" y1="90" x2="185" y2="75" stroke="#6b7280"/><line x1="250" y1="90" x2="250" y2="75" stroke="#6b7280"/><circle cx="218" cy="75" r="7" fill="#fff" stroke="#6b7280"/>'+txt(218,79,'×','ts','middle')+'<line x1="185" y1="75" x2="211" y2="75" stroke="#6b7280"/><line x1="250" y1="75" x2="225" y2="75" stroke="#6b7280"/><line x1="218" y1="68" x2="220" y2="66" stroke="#6b7280"/>';
+    b+='<line x1="10" y1="130" x2="60" y2="130" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 3"/>'+txt(10,124,'h(t−1), x(t)','ts'); b+='<line x1="60" y1="130" x2="300" y2="130" stroke="#2563eb" stroke-dasharray="5 3"/>';
+    b+='<line x1="303" y1="116" x2="303" y2="66" stroke="#6b7280"/><line x1="303" y1="66" x2="340" y2="66" stroke="#6b7280"/><line x1="340" y1="66" x2="340" y2="130" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 3" '+arr('d-lstm')+'/>'+txt(348,134,'h(t) = o · tanh(c)','ts');
+    b+=txt(190,168,'gates f, i, o are sigmoids of (h(t−1), x(t)); c̃ is a tanh of the same','ts','middle');
+    svg('d-lstm',450,178,b); })();
+  (function(){ var b=''; var layers=[6,3,6], xs=[40,170,300]; layers.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=90+(i-(n-1)/2)*20; if(li<2) for(var j=0;j<layers[li+1];j++){ var y2=90+(j-(layers[li+1]-1)/2)*20; b+='<line x1="'+xs[li]+'" y1="'+y+'" x2="'+xs[li+1]+'" y2="'+y2+'" stroke="#e5e7eb"/>'; } } });
+    layers.forEach(function(n,li){ for(var i=0;i<n;i++){ var y=90+(i-(n-1)/2)*20; var off=(li===1&&i!==1); b+='<circle cx="'+xs[li]+'" cy="'+y+'" r="6" fill="'+(li===1?(off?'#e5e7eb':'#6d5bd0'):'#c4b5fd')+'"/>'; } });
+    b+=txt(40,26,'noisy input (6)','ts','middle'); b+=txt(170,26,'bottleneck (3), sparse','ts','middle','fill="#5b21b6"'); b+=txt(300,26,'clean target (6)','ts','middle');
+    svg('d-ae',340,150,b); })();
+  (function(){ var b=''; b+=blk(120,10,160,30,'box-model','pre-dispatch price > 150?'); b+='<line x1="160" y1="40" x2="90" y2="70" stroke="#6b7280" '+arr('d-tree')+'/><line x1="240" y1="40" x2="310" y2="70" stroke="#6b7280" '+arr('d-tree')+'/>'; b+=txt(110,58,'no','ts','end'); b+=txt(290,58,'yes','ts');
+    b+=blk(20,72,150,30,'box-model','demand > 9 GW?'); b+=blk(240,72,150,30,'box-out','predict A$ 310'); b+='<line x1="60" y1="102" x2="40" y2="130" stroke="#6b7280" '+arr('d-tree')+'/><line x1="130" y1="102" x2="150" y2="130" stroke="#6b7280" '+arr('d-tree')+'/>'; b+=blk(5,132,80,26,'box-out','A$ 70'); b+=blk(110,132,80,26,'box-out','A$ 140');
+    svg('d-tree',400,168,b); })();
+  (function(){ var b=''; var xin=80,xh=210,xo=340; var inN=3,hN=5;
+    for(var i=0;i<inN;i++){ var y=90+(i-1)*26; for(var j=0;j<hN;j++){ var y2=90+(j-2)*22; b+='<line x1="'+xin+'" y1="'+y+'" x2="'+xh+'" y2="'+y2+'" stroke="#d1d5db" stroke-dasharray="3 2"/>'; } b+='<path d="M'+xin+' '+y+' Q'+xh+' '+(y-70)+' '+xo+' 90" fill="none" stroke="#2563eb" stroke-width="1.2"/>'; }
+    for(var j2=0;j2<hN;j2++){ var y3=90+(j2-2)*22; b+='<line x1="'+xh+'" y1="'+y3+'" x2="'+xo+'" y2="90" stroke="#6d5bd0" stroke-width="1.6"/>'; }
+    for(var i2=0;i2<inN;i2++){ b+='<circle cx="'+xin+'" cy="'+(90+(i2-1)*26)+'" r="7" fill="#93c5fd"/>'; }
+    for(var j3=0;j3<hN;j3++){ b+='<circle cx="'+xh+'" cy="'+(90+(j3-2)*22)+'" r="7" fill="#e5e7eb" stroke="#9ca3af" stroke-dasharray="2 2"/>'; }
+    b+='<circle cx="'+xo+'" cy="90" r="9" fill="#86efac"/>'; b+=txt(xin,165,'inputs (CNN features)','ts','middle'); b+=txt(xh,165,'random hidden units, never trained','ts','middle'); b+=txt(xo,165,'price','ts','middle'); b+=txt(220,18,'blue: direct link · grey dashed: random fixed weights · purple: learned by least squares','ts','middle');
+    svg('d-rvfl',440,176,b); })();
+  (function(){ var n=100; var t=series(n,function(i){return i;}); var mn=t.map(function(i){return 0.5+0.35*Math.sin(i/14)+0.1*Math.sin(i/5);}); var pts=[8,25,41,60,78,95]; var b=''; var x0=20,y0=150,dx=3.4,sy=100;
+    var up=mn.map(function(v,i){var d=Math.min.apply(null,pts.map(function(p){return Math.abs(p-i);})); return v+0.03+0.012*d;}); var lo=mn.map(function(v,i){var d=Math.min.apply(null,pts.map(function(p){return Math.abs(p-i);})); return v-0.03-0.012*d;});
+    var d='M'+up.map(function(v,i){return (x0+i*dx)+' '+(y0-v*sy);}).join(' L')+' L'+lo.slice().reverse().map(function(v,i){return (x0+(n-1-i)*dx)+' '+(y0-v*sy);}).join(' L')+' Z'; b+='<path d="'+d+'" fill="#ede9fe"/>'+path(mn,x0,y0,dx,sy,'#6d5bd0',1.8);
+    pts.forEach(function(p){ b+='<circle cx="'+(x0+p*dx)+'" cy="'+(y0-mn[p]*sy)+'" r="4" fill="#1f2937"/>'; }); var nx=70; b+='<path d="M'+(x0+nx*dx)+' 38 L'+(x0+nx*dx)+' '+(y0-up[nx]*sy-6)+'" stroke="#d97706" stroke-width="2" '+arr('d-bo')+'/>'; b+=txt(x0+nx*dx-30,32,'next trial: high mean + wide band','ts','middle','fill="#92400e"'); b+=txt(x0,170,'hyperparameter value (e.g. number of lags) →   vertical: validation score','ts');
+    svg('d-bo',400,180,b); })();
+  (function(){ var n=90; var t=series(n,function(i){return i;}); var trend=t.map(function(i){return 0.3+0.004*i;}), daily=t.map(function(i){return 0.5*Math.sin(i/4.2);}), fast=t.map(function(i){return 0.18*Math.sin(i*1.7)+0.12*Math.sin(i*2.9);}); var sig=t.map(function(i){return trend[i]+daily[i]+fast[i];}); var b='', dx=3.6;
+    b+=txt(14,14,'observed price','ts')+path(sig,14,60,dx,28,'#1f2937',1.8); b+='<path d="M175 76 L175 92" stroke="#6b7280" '+arr('d-emd')+'/>'+txt(185,88,'= sum of','ts');
+    b+=txt(14,108,'IMF1 fast (bid noise)','ts','start','fill="#b91c1c"')+path(fast,14,130,dx,28,'#b91c1c'); b+=txt(14,158,'IMF2 daily cycle','ts','start','fill="#2563eb"')+path(daily,14,190,dx,28,'#2563eb'); b+=txt(14,222,'residual trend','ts','start','fill="#15803d"')+path(trend,14,250,dx,28,'#15803d');
+    svg('d-emd',350,262,b); })();
+  (function(){ var b=''; var x0=20, dx=34; function bars(y,vals,col,lab,sc){ var s=txt(x0,y-30,lab,'ts','start','fill="'+col+'"'); vals.forEach(function(v,i){ var w=vals.length===8?26:vals.length===4?58:122; var xx=x0+i*(vals.length===8?dx:vals.length===4?dx*2:dx*4); var hgt=Math.abs(v)*sc; s+='<rect x="'+xx+'" y="'+(v>=0?y-hgt:y)+'" width="'+w+'" height="'+hgt+'" fill="'+col+'" opacity="0.7"/>'; s+=txt(xx+w/2,y+12,fmt(v,v%1?1:0),'ts','middle'); }); return s+'<line x1="'+x0+'" y1="'+y+'" x2="'+(x0+8*dx)+'" y2="'+y+'" stroke="#9ca3af"/>'; }
+    b+=bars(70,hx,'#1f2937','x: eight half-hourly prices',0.13); b+=bars(150,a1,'#15803d','A1 (DWT): pair averages, length 4',0.13); b+=bars(230,d1,'#b91c1c','D1 (DWT): half-differences, the spike lives here',0.25); b+=bars(320,ma1,'#15803d','A1 (MoDWT): moving average, full length',0.13); b+=bars(400,md1,'#b91c1c','D1 (MoDWT): moving half-difference, full length',0.25);
+    svg('d-wavelet',320,420,b); })();
+  flow('d-hybrid',[{t:'raw series',s:['price history'],k:'input'},{t:'decompose',s:['EMD / wavelet / SSA'],k:'prep'},{par:[{t:'component 1',s:['own forecaster'],k:'model'},{t:'component 2',s:['own forecaster'],k:'model'},{t:'component k',s:['own forecaster'],k:'model'}]},{t:'sum',s:[],k:'prep'},{t:'forecast',s:[],k:'out'}],{w:130,h:50,gap:30});
+
+  // ============================================================ Part 3 diagrams
+  (function(){ var b=''; var labels=['17:30 yesterday','last half-hour','3 am']; b+=blk(20,20,120,34,'box-model','query: 18:00 step'); for(var i=0;i<3;i++){ var y=90+i*46; b+=blk(20,y,120,34,'box-input',labels[i],'key '+list(K[i],1)); b+='<path d="M80 54 L80 '+y+'" stroke="#e5e7eb"/>'; var w=aw[i]; b+='<rect x="160" y="'+(y+6)+'" width="'+(w*180)+'" height="22" fill="#6d5bd0" opacity="0.75"/>'; b+=txt(165+w*180,y+21,'weight '+fmt(w,3)+' × value '+fmt(Vv[i],1),'ts'); }
+    b+='<path d="M230 232 L230 252" stroke="#6b7280" '+arr('d-attn')+'/>'; b+=txt(230,268,'output = Σ weight × value = '+fmt(ao,3),'ti','middle');
+    svg('d-attn',420,280,b); })();
+  (function(){ var rows=['+1 h','+2 h','+3 h','+4 h']; var cols=['-6 h','-5 h','-4 h','-3 h','-2 h','-1 h','PD +1','PD +2','PD +3','PD +4']; var Wm=[[.05,.05,.05,.08,.15,.25,.3,.03,.02,.02],[.04,.04,.05,.06,.1,.15,.08,.4,.05,.03],[.06,.03,.04,.05,.07,.1,.04,.08,.45,.08],[.1,.03,.03,.04,.05,.06,.03,.05,.09,.52]]; var b='', x0=120,y0=30,cw=26,ch=26;
+    cols.forEach(function(c,j){ b+=txt(x0+j*cw+cw/2,y0-8,c,'ts','middle'); }); rows.forEach(function(rr,i){ b+=txt(x0-6,y0+i*ch+ch/2+4,rr,'ts','end'); cols.forEach(function(c,j){ b+='<rect x="'+(x0+j*cw)+'" y="'+(y0+i*ch)+'" width="'+cw+'" height="'+ch+'" fill="rgba(109,91,208,'+(0.1+Wm[i][j]*1.6)+')" stroke="#fff"/>'; }); });
+    b+=txt(x0+cols.length*cw/2,y0+rows.length*ch+20,'each output row is a weighted average of the inputs; the weights in a row sum to 1','ts','middle'); b+=txt(x0+cols.length*cw/2,y0+rows.length*ch+36,'each future hour attends mostly to its own pre-dispatch (PD) row and to the last 2 h','ts','middle');
+    svg('d-attnmap',480,y0+rows.length*ch+46,b); })();
+  (function(){ var n=48, x0=30, dx=6.5; var b=''; [1,4,16].forEach(function(per,k){ var y0=40+k*40; var pts=series(n,function(i){return Math.sin(i/per);}); b+=path(pts,x0,y0,dx,14,['#b91c1c','#2563eb','#15803d'][k]); b+=txt(x0+n*dx+6,y0+4,'channel '+k+' (period ~'+(Math.round(2*Math.PI*per))+' steps)','ts'); });
+    var y1=180; b+=path(series(n,function(i){return Math.sin(2*Math.PI*i/48);}),x0,y1,dx,16,'#6d5bd0',1.8)+path(series(n,function(i){return Math.cos(2*Math.PI*i/48);}),x0,y1,dx,16,'#d97706',1.8); b+=txt(x0+n*dx+6,y1+4,'half-hour-of-day sin (purple), cos (orange)','ts'); b+=txt(x0,215,'positions 0 … 47 (one day of half-hours) →','ts');
+    svg('d-pos',560,225,b); })();
+  (function(){ var b=''; var x=40; b+='<line x1="'+x+'" y1="230" x2="'+x+'" y2="15" stroke="#6b7280" '+arr('d-tlayer')+'/>';
+    b+=blk(x+30,190,150,28,'box-prep','LayerNorm'); b+=blk(x+30,150,150,28,'box-model','multi-head attention'); b+=blk(x+30,100,150,28,'box-prep','LayerNorm'); b+=blk(x+30,60,150,28,'box-model','feed-forward (d→ff→d)');
+    b+='<circle cx="'+x+'" cy="135" r="7" fill="#fff" stroke="#6d5bd0"/>'+txt(x,139,'+','ts','middle'); b+='<circle cx="'+x+'" cy="45" r="7" fill="#fff" stroke="#6d5bd0"/>'+txt(x,49,'+','ts','middle');
+    b+='<path d="M'+x+' 204 L'+(x+30)+' 204" stroke="#6b7280"/><path d="M'+(x+180)+' 204 L'+(x+200)+' 204 L'+(x+200)+' 164 L'+(x+180)+' 164" fill="none" stroke="#6b7280"/><path d="M'+(x+30)+' 164 L'+(x+7)+' 140" stroke="#6b7280" '+arr('d-tlayer')+'/>';
+    b+='<path d="M'+x+' 114 L'+(x+30)+' 114" stroke="#6b7280"/><path d="M'+(x+180)+' 114 L'+(x+200)+' 114 L'+(x+200)+' 74 L'+(x+180)+' 74" fill="none" stroke="#6b7280"/><path d="M'+(x+30)+' 74 L'+(x+7)+' 50" stroke="#6b7280" '+arr('d-tlayer')+'/>';
+    b+=txt(x+260,204,'residual wire: the input skips the block and is added back','ts'); b+=txt(x+260,164,'d_model 128, 4 heads of 32','ts'); b+=txt(x+260,74,'ff_dim 512, most of the parameters','ts'); b+=txt(x+260,30,'× 3 layers (small model)','ts'); b+=txt(x,245,'input row (128 numbers) ↑ output row (128 numbers)','ts');
+    svg('d-tlayer',620,255,b); })();
+  (function(){ var b=''; var shapes=[{n:'encoder-decoder',enc:1,dec:1},{n:'encoder-only',enc:1,dec:0},{n:'decoder-only',enc:0,dec:1}]; shapes.forEach(function(sh,i){ var x0=14+i*190;
+    b+='<rect x="'+x0+'" y="8" width="176" height="150" rx="10" fill="#fff" stroke="#e5e7eb"/>'+txt(x0+88,26,sh.n,'ti','middle');
+    b+='<rect x="'+(x0+10)+'" y="110" width="74" height="30" rx="6" class="box-input" opacity="'+(sh.enc?1:0.25)+'"/>'+txt(x0+47,129,'past 48 h','ts','middle'); b+='<rect x="'+(x0+92)+'" y="110" width="74" height="30" rx="6" class="box-input" opacity="'+(sh.dec?1:0.25)+'"/>'+txt(x0+129,129,'future covs','ts','middle');
+    b+='<rect x="'+(x0+10)+'" y="66" width="74" height="30" rx="6" class="box-model" opacity="'+(sh.enc?1:0.25)+'"/>'+txt(x0+47,85,'encoder','ts','middle'); b+='<rect x="'+(x0+92)+'" y="66" width="74" height="30" rx="6" class="box-model" opacity="'+(sh.dec?1:0.25)+'"/>'+txt(x0+129,85,sh.dec?'decoder':'—','ts','middle');
+    if(sh.enc&&sh.dec) b+='<path d="M'+(x0+84)+' 81 L'+(x0+92)+' 81" stroke="#6d5bd0" stroke-width="2"/>'+txt(x0+88,60,'cross-attn','ts','middle','fill="#5b21b6"');
+    b+='<rect x="'+(x0+10)+'" y="34" width="156" height="22" rx="6" class="box-out"/>'+txt(x0+88,49,sh.enc&&!sh.dec?'pool/flatten → 32 prices':'32 prices','ts','middle'); });
+    svg('d-encdec',590,168,b); })();
+  flow('d-tft',[{par:[{t:'past inputs',s:['price, demand, weather obs'],k:'input'},{t:'known future',s:['pre-dispatch, weather fc'],k:'input'},{t:'static',s:['region id'],k:'input'}]},{t:'variable selection',s:['softmax weight per input'],k:'model'},{t:'LSTM enc-dec',s:['local order'],k:'model'},{t:'gated attention',s:['one interpretable layer'],k:'model'},{t:'quantiles',s:['p10 / p50 / p90'],k:'out'}],{w:150,h:50,gap:28});
+  (function(){ var n=48; var sig=series(n,function(i){return 0.5+0.4*Math.sin(i/5)+0.1*Math.sin(i*1.3);}); var b='', x0=14,y0=60,dx=7; b+=path(sig,x0,y0,dx,40,'#1f2937',1.6);
+    for(var p=0;p<5;p++){ var px=x0+p*6*dx-2; b+='<rect x="'+px+'" y="'+(14+(p%2)*4)+'" width="'+(12*dx+4)+'" height="60" rx="4" fill="rgba(109,91,208,'+(p%2?0.10:0.18)+')" stroke="#6d5bd0"/>'; b+=txt(px+6*dx,92,'patch '+(p+1),'ts','middle','fill="#5b21b6"'); }
+    b+=txt(x0,112,'patch length 12, stride 6 here (Sinclair: 24 and 6 over 96 steps → 13 patches); each patch → one token','ts');
+    svg('d-patch',560,120,b); })();
+  (function(){ var b=''; var n=8, cw=16; for(var i=0;i<n;i++)for(var j=0;j<n;j++){ b+='<rect x="'+(20+j*cw)+'" y="'+(20+i*cw)+'" width="'+cw+'" height="'+cw+'" fill="rgba(109,91,208,0.5)" stroke="#fff"/>'; } b+=txt(20+n*cw/2,20+n*cw+16,'full: L² = 64 cells','ts','middle');
+    var active=[1,4,6]; for(var i2=0;i2<n;i2++)for(var j2=0;j2<n;j2++){ var act=active.indexOf(i2)>=0; b+='<rect x="'+(200+j2*cw)+'" y="'+(20+i2*cw)+'" width="'+cw+'" height="'+cw+'" fill="'+(act?'rgba(109,91,208,0.8)':'#f3f4f6')+'" stroke="#fff"/>'; } b+=txt(200+n*cw/2,20+n*cw+16,'ProbSparse: 3 active query rows, rest = mean of values','ts','middle');
+    b+=txt(20,12,'queries ↓  keys →','ts');
+    svg('d-informer',400,176,b); })();
+  flow('d-timesfm',[{t:'billions of time points',s:['retail, traffic, weather,','finance, energy ...'],k:'input'},{t:'pre-trained model',s:['decoder-only transformer,','patches in, patches out'],k:'model'},{t:'your history',s:['NSW price only, no covariates'],k:'input'},{t:'zero-shot forecast',s:['no training on NEM'],k:'out'}],{w:150,h:56,gap:24});
+  (function(){ var b=''; b+='<rect x="14" y="30" width="200" height="90" rx="10" fill="#e5e7eb" stroke="#9ca3af"/>'+txt(114,60,'frozen weights W','ti','middle')+txt(114,78,'4096 × 4096, stored in 4-bit','ts','middle')+txt(114,94,'never updated','ts','middle');
+    b+='<rect x="250" y="35" width="54" height="80" rx="8" class="box-model" stroke="#6d5bd0"/>'+txt(277,80,'A','ti','middle')+txt(277,96,'4096×8','ts','middle'); b+='<rect x="314" y="35" width="80" height="26" rx="8" class="box-model" stroke="#6d5bd0"/>'+txt(354,52,'B  8×4096','ts','middle');
+    b+=txt(232,80,'+','ti','middle'); b+=txt(210,140,'output = x·W + x·(A·B): only A and B train, '+fmt(100*lora/full,2)+' % of the parameters','ts','middle');
+    svg('d-lora',420,150,b); })();
+
+  // ============================================================ Part 4 diagrams
+  (function(){ var b=''; for(var i=0;i<4;i++){ var x=30+i*110; b+=blk(x,60,80,34,'box-model','state '+(i+1),'≈ demand'); if(i<3) b+='<path d="M'+(x+80)+' 77 L'+(x+110)+' 77" stroke="#6b7280" '+arr('d-ssm')+'/>'+txt(x+95,70,'GRU','ts','middle'); b+='<path d="M'+(x+40)+' 60 L'+(x+40)+' 34" stroke="#15803d" '+arr('d-ssm')+'/>'+txt(x+40,26,'price '+(i+1)+' = G(state)','ts','middle'); b+='<path d="M'+(x+40)+' 130 L'+(x+40)+' 94" stroke="#2563eb" '+arr('d-ssm')+'/>'+txt(x+40,144,'inputs '+(i+1),'ts','middle'); b+='<path d="M'+(x+60)+' 94 L'+(x+60)+' 112" stroke="#d97706" stroke-dasharray="3 2"/>'+txt(x+62,122,'← trained to match demand','ts','start','fill="#92400e"'); }
+    svg('d-ssm',600,155,b); })();
+  (function(){ var b=''; b+=blk(30,20,150,52,'box-model','agent','transformer → actor / critic'); b+=blk(250,20,150,52,'box-bench','NEM simulator','settles at actual prices');
+    b+='<path d="M180 34 L250 34" stroke="#6b7280" '+arr('d-rl')+'/>'+txt(215,28,'action: bids','ts','middle'); b+='<path d="M250 60 L180 60" stroke="#15803d" stroke-width="1.6" '+arr('d-rl')+'/>'+txt(215,76,'reward: revenue; next state','ts','middle','fill="#166534"');
+    b+=txt(215,100,'critic learns Q(s,a) from rewards; actor moves toward actions the critic rates highly;','ts','middle'); b+=txt(215,114,'the entropy bonus keeps the actor exploring','ts','middle');
+    svg('d-rl',430,125,b); })();
+  (function(){ var b=''; var x0=40,y0=150; b+='<line x1="'+x0+'" y1="'+y0+'" x2="360" y2="'+y0+'" stroke="#9ca3af"/><line x1="'+x0+'" y1="'+y0+'" x2="'+x0+'" y2="20" stroke="#9ca3af"/>'; b+=txt(200,168,'forecast demand (GW) →','ts','middle'); b+=txt(x0+4,16,'SHAP value of demand ↑','ts','start');
+    for(var i=0;i<70;i++){ var d=6+i*0.06+Math.sin(i*7)*0.3; var hot=(i*13)%5<2; var y=y0-((d-6)*28+(hot?12:0)+Math.sin(i*3)*6); b+='<circle cx="'+(x0+i*4.4)+'" cy="'+y+'" r="3" fill="'+(hot?'#b91c1c':'#2563eb')+'" opacity="0.7"/>'; }
+    b+=txt(300,40,'red: hot day','ts','start','fill="#b91c1c"'); b+=txt(300,56,'blue: mild day','ts','start','fill="#2563eb"');
+    svg('d-shap',400,180,b); })();
+
+  // ============================================================ Part 5 paper diagrams
+  flow('d-tan', [
+    {t:'NSW price history', s:['+ related factors','(AEMO)'], k:'input'},
+    {t:'Correlation screen', s:['keep factors that','correlate with price'], k:'prep'},
+    {t:'ICEEMDAN', s:['split every series into','IMF1 ... IMFn + trend'], k:'prep'},
+    {par:[{t:'IMF1 (fastest)', s:['CNN → SSDAE → price part'], k:'model'},{t:'IMF2', s:['CNN → SSDAE → price part'], k:'model'},{t:'... IMFn + trend', s:['CNN → SSDAE → price part'], k:'model'}]},
+    {t:'Sum the parts', s:['component forecasts','added back together'], k:'prep'},
+    {t:'Next-day price', s:['48 half-hours'], k:'out'}
+  ]);
+  flow('d-ghimire23', [
+    {par:[{t:'6 lagged demand values', s:['daily, lags from','mutual-information test'], k:'input'},{t:'10 SILO climate variables', s:['rain, radiation, humidity,','evaporation, Tmax, Tmin ...'], k:'input'}]},
+    {t:'Time2Vec embedding', s:['learned sine features','of time replace','positional encoding'], k:'prep'},
+    {t:'3 × attention block', s:['12-head self-attention','+ dropout + LayerNorm','+ Conv1D (ReLU)'], k:'model'},
+    {t:'Global average pool', s:['collapse the sequence','to one vector'], k:'model'},
+    {t:'Dense (1 unit, linear)', s:['+ KDE 95 % interval'], k:'model'},
+    {t:'Tomorrow\'s demand', s:['MW, per substation'], k:'out'}
+  ]);
+  flow('d-li', [
+    {t:'7 market prices', s:['spot + 6 contingency FCAS','last 32 × 5-min intervals'], k:'input'},
+    {t:'Embed to 64-d', s:['+ positional encoding'], k:'model'},
+    {t:'Transformer × 2 layers', s:['8-head self-attention','over the 32 intervals'], k:'model'},
+    {t:'Global average pool', s:['1 × 64 feature vector'], k:'model'},
+    {t:'Soft Actor-Critic', s:['actor: 2 × 512 units','critic: 2 × 512 units'], k:'model'},
+    {par:[{t:'Bids', s:['charge / discharge MW','spot + 6 FCAS quantities'], k:'out'},{t:'NEM simulator', s:['dispatches, pays revenue,','revenue trains everything'], k:'bench'}]}
+  ]);
+  flow('d-ghimire24', [
+    {t:'NSW half-hourly price', s:['lagged history'], k:'input'},
+    {t:'MoDWT', s:['J levels → J detail series','+ 1 approximation,','all full length'], k:'prep'},
+    {t:'CNN', s:['1-D convolutions extract','shape features'], k:'model'},
+    {t:'RVFL', s:['random hidden layer (fixed)','+ direct link; output','weights by least squares'], k:'model'},
+    {t:'Next half-hour price', s:['scored by season, 2022'], k:'out'}
+  ], {extraH:46, extra:function(W,H){ return '<rect x="'+(W/2-245)+'" y="'+(H-40)+'" width="490" height="30" rx="8" fill="#fff" stroke="#6d5bd0" stroke-dasharray="5 3"/><text x="'+(W/2)+'" y="'+(H-21)+'" text-anchor="middle" class="ts" fill="#5b21b6">Bayesian optimisation loop: re-run with new lags / levels / filters, keep the best validation score</text>'; }});
+  flow('d-liu', [
+    {par:[{t:'AEMO market notices', s:['free text: LOR, constraints,','interventions ...'], k:'input'},{t:'Price history', s:['NEM spot, SA and NSW'], k:'input'}]},
+    {par:[{t:'LLM fine-tuned with QLoRA', s:['reads each notice → region,','window, event type'], k:'model'},{t:'Wavelet transform', s:['denoised price components'], k:'prep'}]},
+    {par:[{t:'Event time series', s:['1 when a notice is active'], k:'prep'},{t:'CNN-LSTM', s:['convolution then recurrence','over price + events'], k:'model'}]},
+    {t:'Adjusted price forecast', s:['raised during active events'], k:'out'}
+  ]);
+  flow('d-malyala', [
+    {t:'Price + aggregate demand', s:['state-wide RRP and','total demand history','(no weather by design)'], k:'input'},
+    {par:[{t:'GPI: Graph Patch Informer', s:['patches → graph layer →','sparse attention'], k:'model'},{t:'DSSM: GRU state-space', s:['hidden state = demand','drives price'], k:'model'}]},
+    {t:'Fusion + feed-forward', s:['smooth L1 loss'], k:'model'},
+    {t:'RRP forecast', s:['(+ demand)'], k:'out'}
+  ]);
+  flow('d-sinclair', [
+    {par:[{t:'Past 96 half-hours (48 h)', s:['RRP, demand, interchange,','weather obs, calendar sin/cos'], k:'input'},{t:'Next 32 half-hours (16 h)', s:['AEMO pre-dispatch RRP & demand,','weather forecast, hours-to-delivery'], k:'input'}]},
+    {par:[{t:'Encoder × 3 layers', s:['4-head self-attention','+ feed-forward 512, d 128','pre-LayerNorm, residuals'], k:'model'},{t:'Decoder × 3 layers', s:['self-attention over future rows,','cross-attention to encoder','+ feed-forward'], k:'model'}]},
+    {t:'LayerNorm + linear', s:['one price per future step,','all 32 in one pass'], k:'model'},
+    {t:'RRP for +0.5 h … +16 h', s:['scored at 2, 4, 8, 12, 16 h'], k:'out'}
+  ], {w:190});
+  (function(){ var el=document.getElementById('d-variants'); if(!el)return; var v=[{n:'(a) Enc-dec, parallel',enc:1,dec:1,ar:0,note:'best in VIC after TFT'},{n:'(b) Enc-dec, autoregressive',enc:1,dec:1,ar:1,note:'slower, 2-4 pts worse'},{n:'(c) Encoder-only',enc:1,dec:0,ar:0,note:'no future covariates: 43-65 %'},{n:'(d) Decoder-only, parallel',enc:0,dec:1,ar:0,note:'best in NSW & QLD'},{n:'(e) Decoder-only, autoregressive',enc:0,dec:1,ar:1,note:'close behind (d)'}];
+    var w=210,h=170,gap=14,W=v.length*(w+gap)+gap,H=h+20; var s='<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">';
+    v.forEach(function(x,i){ var x0=gap+i*(w+gap); s+='<rect x="'+x0+'" y="8" width="'+w+'" height="'+h+'" rx="10" fill="#fff" stroke="#e5e7eb"/>'; s+='<text x="'+(x0+w/2)+'" y="28" text-anchor="middle" class="ti">'+esc(x.n)+'</text>';
+      s+='<rect x="'+(x0+12)+'" y="40" width="86" height="36" rx="6" class="box-input" opacity="'+(x.enc?1:0.25)+'"/><text x="'+(x0+55)+'" y="62" text-anchor="middle" class="ts">past 48 h</text>'; s+='<rect x="'+(x0+112)+'" y="40" width="86" height="36" rx="6" class="box-input" opacity="'+(x.dec?1:0.25)+'"/><text x="'+(x0+155)+'" y="62" text-anchor="middle" class="ts">future covariates</text>';
+      s+='<rect x="'+(x0+12)+'" y="88" width="86" height="36" rx="6" class="box-model" opacity="'+(x.enc?1:0.25)+'"/><text x="'+(x0+55)+'" y="110" text-anchor="middle" class="ts">encoder</text>'; s+='<rect x="'+(x0+112)+'" y="88" width="86" height="36" rx="6" class="box-model" opacity="'+(x.dec?1:0.25)+'"/><text x="'+(x0+155)+'" y="110" text-anchor="middle" class="ts">decoder</text>';
+      if(x.enc&&x.dec) s+='<path d="M'+(x0+98)+' 106 L'+(x0+112)+' 106" stroke="#6b7280" stroke-width="1.4"/>'; s+='<rect x="'+(x0+12)+'" y="136" width="186" height="26" rx="6" class="box-out"/><text x="'+(x0+105)+'" y="153" text-anchor="middle" class="ts">'+(x.ar?'32 prices, one step at a time':'32 prices in one pass')+'</text>'; s+='<text x="'+(x0+w/2)+'" y="'+(h+16)+'" text-anchor="middle" class="ts" fill="#6b7280">'+esc(x.note)+'</text>'; });
+    el.innerHTML=s+'</svg>'; })();
+  (function(){ var el=document.getElementById('d-baselines'); if(!el)return; var v=[{n:'Two-layer LSTM',rows:['past + future covariates','LSTM → LSTM → dense'],sees:'both'},{n:'Temporal Fusion Transformer',rows:['variable selection → LSTM','→ attention → quantiles'],sees:'both'},{n:'PatchTST',rows:['past only, patch 24 / stride 6','encoder-only, per-channel'],sees:'past'},{n:'TimesFM',rows:['past price only, zero-shot','pre-trained decoder-only'],sees:'past'},{n:'AEMO pre-dispatch',rows:['dispatch engine output','at each run, per horizon'],sees:'none'}];
+    var w=210,h=120,gap=14,W=v.length*(w+gap)+gap,H=h+16; var s='<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">';
+    v.forEach(function(x,i){ var x0=gap+i*(w+gap); s+='<rect x="'+x0+'" y="8" width="'+w+'" height="'+h+'" rx="10" fill="#fff" stroke="#e5e7eb"/>'; s+='<text x="'+(x0+w/2)+'" y="28" text-anchor="middle" class="ti">'+esc(x.n)+'</text>'; s+='<rect x="'+(x0+12)+'" y="40" width="86" height="30" rx="6" class="box-input" opacity="'+(x.sees!=='none'?1:0.25)+'"/><text x="'+(x0+55)+'" y="59" text-anchor="middle" class="ts">past 48 h</text>'; s+='<rect x="'+(x0+112)+'" y="40" width="86" height="30" rx="6" class="box-input" opacity="'+(x.sees==='both'?1:0.25)+'"/><text x="'+(x0+155)+'" y="59" text-anchor="middle" class="ts">future covariates</text>'; x.rows.forEach(function(rw,j){ s+='<text x="'+(x0+w/2)+'" y="'+(92+j*15)+'" text-anchor="middle" class="ts">'+esc(rw)+'</text>'; }); });
+    el.innerHTML=s+'</svg>'; })();
+})();
+</script>
+</body>
+</html>
