@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autoencoders, worked: plain, denoising, sparse, stacked — trained live on daily price shapes</title>
+<style>
+  :root{--ink:#1f2937;--muted:#6b7280;--line:#e5e7eb;--panel:#f8fafc;--accent:#6d5bd0;--input:#dbeafe;--model:#ede9fe;--out:#dcfce7;--prep:#fef3c7;--bench:#fee2e2}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);line-height:1.55;font-size:15.5px}
+  header{padding:32px 28px 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#f5f3ff 0%,#fff 100%)}
+  header h1{margin:0 0 6px;font-size:26px;line-height:1.2}
+  header p{margin:4px 0;max-width:960px;color:var(--muted)}
+  main{max-width:1100px;margin:0 auto;padding:12px 28px 80px}
+  h2{font-size:22px;margin:44px 0 8px;padding-top:12px;border-top:3px solid var(--accent)}
+  h3{font-size:17px;margin:22px 0 6px}
+  p{margin:6px 0 10px}
+  .one{font-size:16px;background:var(--panel);border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:8px 0 12px}
+  .one b{color:var(--accent)}
+  .note{background:var(--panel);border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0 14px;font-size:14px}
+  .warn{border-left-color:#d97706;background:#fffbeb}
+  .confuse{border-left-color:#b91c1c;background:#fff7f7}
+  .ex{background:var(--panel);border-radius:8px;padding:10px 14px;margin:8px 0 12px;font-size:14px}
+  .ex .exh{font-weight:600;color:var(--accent);font-size:13px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+  .diagram{border:1px dashed var(--line);border-radius:10px;padding:10px 8px 4px;background:#fcfcfd;margin:8px 0 12px;overflow-x:auto}
+  .diagram .cap{font-size:13px;color:var(--muted);margin:4px 6px 6px}
+  table{border-collapse:collapse;font-size:13.5px;margin:8px 0 14px}
+  th,td{border:1px solid var(--line);padding:5px 9px;text-align:left;vertical-align:top}
+  th{background:var(--panel);font-weight:600}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.best td{background:#f0fdf4;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media (max-width:860px){.grid2,.grid3{grid-template-columns:1fr}}
+  svg text{font-family:inherit}
+  .ti{font-size:12.5px;font-weight:600;fill:var(--ink)} .ts{font-size:11px;fill:#4b5563}
+  .box-input{fill:var(--input)} .box-model{fill:var(--model)} .box-out{fill:var(--out)} .box-prep{fill:var(--prep)} .box-bench{fill:var(--bench)}
+  .v{font-variant-numeric:tabular-nums;font-weight:600}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:var(--panel);padding:1px 4px;border-radius:4px}
+  .formula{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:6px 0;display:inline-block}
+  ol.steps{padding-left:22px} ol.steps li{margin:4px 0}
+  .btn{display:inline-block;padding:6px 12px;border:1px solid var(--accent);color:var(--accent);border-radius:8px;text-decoration:none;font-size:13.5px;margin:4px 6px 4px 0}
+  .kv{display:grid;grid-template-columns:200px 1fr;gap:4px 12px;font-size:14px;margin:6px 0 10px} .kv div:nth-child(odd){color:var(--muted)}
+  #status{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Autoencoders, worked: plain, denoising, sparse, stacked</h1>
+  <p>Every chart below comes from a small neural network that this page trains in your browser, from scratch, when it loads (about a second). The data are synthetic "days" of eight three-hourly NSW-style prices. Nothing is hard-coded; the random seed is fixed so the same numbers come back on every visit (change the seed in the script to re-roll).</p>
+  <p><a class="btn" href="index.html#c-ae">← back to the papers page</a> <span id="status">training…</span></p>
+</header>
+<main>
+
+<h2 id="what">1 · What an autoencoder is, and why anyone would train a network to output its own input</h2>
+<p class="one"><b>In one sentence.</b> An autoencoder is two networks glued together, an encoder that squeezes the input into a few numbers and a decoder that rebuilds the input from those numbers, trained so that the rebuild matches the original; the few numbers in the middle are a learned summary, and the point of the whole exercise is to get that summary.</p>
+<p>Suppose every day's price profile were secretly made from just two dials: a base level and an evening-peak height. If you knew the dials you could redraw the day. An autoencoder is a machine that discovers the dials from examples. The encoder learns "read the day, set the dials"; the decoder learns "read the dials, draw the day". Because the middle is narrow (two numbers for eight prices), the network cannot cheat by copying; it has to find the structure.</p>
+<div class="diagram"><div id="d-ae-shape"></div><div class="cap">Eight inputs, a two-unit bottleneck, eight outputs. Training minimises the difference between the right-hand column and the left-hand column.</div></div>
+
+<h3>The training data this page generates</h3>
+<p>240 synthetic days. Each is built from three hidden factors plus a little noise, in A$/MWh at 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00 and 21:00:</p>
+<span class="formula">price = level × (1 − 0.15 × midday dip) + peak × [0,0,0,0,0,0.3,1,0.4] + morning × [0,0.2,1,0.5,0,0,0,0] + noise</span>
+<div class="kv">
+  <div>level</div><div>A$40 to A$120, the overnight baseline</div>
+  <div>peak</div><div>A$0 to A$250, the evening peak height (the dominant factor)</div>
+  <div>morning</div><div>A$0 to A$30, a small breakfast bump (deliberately minor, to see what a 2-number bottleneck throws away)</div>
+  <div>noise</div><div>A$3 standard deviation per slot</div>
+</div>
+<div class="diagram"><div id="d-data"></div><div class="cap">Twelve of the 240 generated days. The evening peak varies most, the base level next, the morning bump least.</div></div>
+<p>200 days are used for training and 40 are held out for testing. All prices are divided by 100 before they enter the network and multiplied by 100 on the way out.</p>
+
+<h2 id="plain">2 · The plain autoencoder: 8 → 2 → 8</h2>
+<p>Encoder: one layer, 8 inputs to 2 units with a tanh bend. Decoder: one linear layer, 2 to 8. Loss: mean squared reconstruction error. Optimiser: Adam, 1,200 full-batch steps. That is 8×2 + 2 + 2×8 + 8 = 42 weights in total.</p>
+<div class="grid2">
+  <div class="diagram"><div id="d-loss-plain"></div><div class="cap">Reconstruction error (RMSE, A$/MWh) on the 200 training days as training proceeds.</div></div>
+  <div class="diagram"><div id="d-recon-plain"></div><div class="cap">Six held-out days: original in grey, rebuilt from two numbers in purple.</div></div>
+</div>
+<div class="ex"><div class="exh">Result</div>
+  Held-out reconstruction RMSE: <span class="v" id="v-plain-rmse"></span> A$/MWh, from a two-number code. For comparison, replacing every day with the average day gives <span class="v" id="v-mean-rmse"></span>. The residual error is mostly the morning bump and the noise, which two numbers cannot hold.
+</div>
+
+<h3>What did the two numbers learn to mean?</h3>
+<p>Ask the decoder directly: hold one code number at zero and sweep the other from −1 to +1, and draw what it produces. Each code number is a "dial" and its sweep is the shape that dial controls.</p>
+<div class="grid2">
+  <div class="diagram"><div id="d-dial1"></div><div class="cap">Dial 1 swept from −1 (light) to +1 (dark), dial 2 held at 0.</div></div>
+  <div class="diagram"><div id="d-dial2"></div><div class="cap">Dial 2 swept, dial 1 held at 0.</div></div>
+</div>
+<div class="diagram"><div id="d-code-scatter"></div><div class="cap">Every training day placed at its two code values. Colour is the true evening-peak height, size is the true base level. The network was never told either factor; it found axes that separate them because that is the cheapest way to rebuild the days.</div></div>
+<div class="ex"><div class="exh">Reading it</div>
+  <span id="v-dial-text"></span> The dials are usually rotated or mixed versions of (level, peak) rather than the clean factors, because any rotation of the code plane reconstructs equally well; that is why autoencoder features are useful to a downstream model but rarely interpretable one by one.
+</div>
+
+<h3>What the bottleneck size does</h3>
+<p>Same setup, different middle widths. Fewer numbers, more loss; more numbers than there are real factors, and the network starts storing noise.</p>
+<div id="t-bottleneck"></div>
+<div class="note confuse"><b>Common confusion.</b> A linear autoencoder with k units learns the same subspace as principal component analysis (PCA) with k components. The nonlinearity (tanh) in the encoder is what lets it beat PCA on curved structure. On this nearly-linear toy the gap is small; on real price data with regime shifts it is not.</div>
+
+<h2 id="denoise">3 · The denoising autoencoder: train on damaged input, target the clean input</h2>
+<p class="one"><b>In one sentence.</b> Corrupt each training day before it enters the encoder, but keep the loss against the uncorrupted day; the only way to succeed is to learn what typical days look like and use that knowledge to fill in the damage, so the code stops caring about noise.</p>
+<p>Corruption used here, applied fresh every training step: Gaussian noise of A$12 on every slot, and with probability 0.3 one random slot gets a spurious spike of up to A$80 added, imitating a single-interval bid jump.</p>
+<div class="diagram"><div id="d-corrupt"></div><div class="cap">One day (grey), its corrupted version (red), and what the two autoencoders make of the corrupted version: plain (dashed purple) and denoising (solid green).</div></div>
+<div id="t-denoise"></div>
+<div class="ex"><div class="exh">Reading it</div>
+  On clean input both autoencoders are similar. On corrupted input the plain one passes part of the damage through (it was never taught that a spike at 09:00 is implausible), while the denoising one <span id="v-dae-text"></span>. Tan 2023 stacks denoising autoencoders on top of the CNN's features precisely so that the regression at the top sees features that have been made insensitive to interval-level jitter.
+</div>
+<div class="note warn">The denoising trick assumes the noise you add in training resembles the noise you will meet. It suppresses <em>that</em> kind of variation. If the "noise" is actually the signal you want (a genuine spike), a denoising front end will smooth it away, which is one reason decomposition-plus-autoencoder pipelines look good on average error and poor on spike windows.</div>
+
+<h2 id="sparse">4 · The sparse autoencoder: a wide middle, but only a few units allowed on</h2>
+<p class="one"><b>In one sentence.</b> Give the middle layer more units than the input has values, which would let it copy the input straight through, then add a penalty that keeps each unit's average activation near a small target like 0.1; the network is forced to explain each day with a few strongly-active units, and each unit ends up standing for one recognisable pattern.</p>
+<p>The penalty is a Kullback-Leibler term per hidden unit comparing its mean activation ρ̂<sub>j</sub> over the batch with the target ρ:</p>
+<span class="formula">penalty = β · Σ<sub>j</sub> [ ρ log(ρ/ρ̂<sub>j</sub>) + (1−ρ) log((1−ρ)/(1−ρ̂<sub>j</sub>)) ]</span>
+<p>It is zero when ρ̂<sub>j</sub> = ρ and grows quickly as a unit becomes always-on. Here: 8 → 12 (sigmoid) → 8, ρ = 0.1, β = 0.3, trained twice, once with the penalty switched off and once on.</p>
+<div class="grid2">
+  <div class="diagram"><div id="d-sparse-mean"></div><div class="cap">Mean activation of each of the 12 hidden units over the training set, without the penalty (grey) and with it (purple). The dashed line is the target ρ = 0.1.</div></div>
+  <div class="diagram"><div id="d-sparse-heat"></div><div class="cap">Activation of the 12 units on ten test days (rows), with the penalty. Dark = on. Each day lights up only a few units.</div></div>
+</div>
+<div id="t-sparse"></div>
+<div class="diagram"><div id="d-sparse-atoms"></div><div class="cap">What the three most-used units draw when switched on alone (their decoder columns). With the penalty, units specialise: typically one for the evening peak, one for the base level, one for the morning bump.</div></div>
+<div class="ex"><div class="exh">Reading it</div>
+  Without the penalty the 12-unit middle is wider than the 8-value input, so the network can (and does) find a near-identity mapping: reconstruction is nearly perfect and the code is useless, because it is just the input rearranged. With the penalty, reconstruction costs a little (<span id="v-sparse-text"></span>) but the code becomes a short list of "which patterns are present today", which is what a downstream regression can use. "Sparse" in SSDAE is this penalty; "denoising" is the corruption from section 3; both are applied at once.
+</div>
+
+<h2 id="stacked">5 · Stacking: train one layer at a time, then fine-tune the whole tower</h2>
+<p class="one"><b>In one sentence.</b> Train autoencoder 1 on the data, freeze its encoder, train autoencoder 2 on the codes that encoder 1 produces, and so on; then discard the decoders, put a regression layer on top of the encoder tower, and train everything together on the real target; each stage starts from weights that already capture structure, instead of from random numbers.</p>
+<ol class="steps">
+  <li>AE1: 8 → 4 → 8 on the days. Keep encoder E1 (8 → 4).</li>
+  <li>Push every day through E1 to get 4-number codes. AE2: 4 → 2 → 4 on those codes. Keep encoder E2 (4 → 2).</li>
+  <li>Stack: day → E1 → E2 → new linear layer → target. Here the target is tomorrow's evening peak, which is generated as 0.7 × today's peak + 0.3 × today's level + noise, so it is learnable but not trivial.</li>
+  <li>Fine-tune all layers together on the target.</li>
+</ol>
+<div class="diagram"><div id="d-stack"></div><div class="cap">Greedy layer-wise pre-training, then supervised fine-tuning. The decoders are scaffolding and are thrown away.</div></div>
+<p>The comparison that matters: the same 8 → 4 → 2 → 1 network trained from random weights ("from scratch") versus from the pre-trained encoders. Two optimiser settings are shown, because the answer depends on them.</p>
+<div class="grid2">
+  <div class="diagram"><div id="d-stack-sgd"></div><div class="cap">Plain gradient descent, sigmoid units, no tricks (the 2010-era setting in which stacked autoencoders were introduced). Validation RMSE of the peak forecast against training steps.</div></div>
+  <div class="diagram"><div id="d-stack-adam"></div><div class="cap">Same network with Adam and tanh units (the modern default).</div></div>
+</div>
+<div id="t-stack"></div>
+<div class="ex"><div class="exh">Reading it</div>
+  <span id="v-stack-text"></span> This is the general finding: layer-wise pre-training was a large advantage when deep networks were trained with plain gradient descent and saturating units, and a small or nil advantage once Adam, ReLU and good initialisation arrived. Tan 2023's remark that the SSDAE "accelerates training time and convergence" should be read against that history; what still stands is that the encoder tower produces denoised, sparse features that a simple regression can use.
+</div>
+
+<h2 id="which">6 · Which one, when</h2>
+<table>
+  <thead><tr><th>Variant</th><th>What it adds</th><th>Use it when</th><th>Cost</th><th>Where on the papers page</th></tr></thead>
+  <tbody>
+    <tr><td>Plain</td><td>Compression to k numbers</td><td>You want a compact feature vector or a nonlinear PCA</td><td>Nothing, but the code is a rotation of the factors, not the factors</td><td>Baseline "SDAE" rows in Tan 2023 Case I</td></tr>
+    <tr><td>Denoising</td><td>Robustness to the corruption you train with</td><td>Inputs are jittery and you know roughly what the jitter looks like</td><td>Smooths genuine outliers too; spikes are at risk</td><td>Tan 2023 SSDAE</td></tr>
+    <tr><td>Sparse</td><td>Each unit means one pattern; wide middle allowed</td><td>You want interpretable-ish parts and a code a linear model can read</td><td>Two extra hyperparameters (ρ, β); slightly worse reconstruction</td><td>Tan 2023 SSDAE</td></tr>
+    <tr><td>Stacked</td><td>Depth, trained one layer at a time</td><td>Little data, plain SGD, or you need a stable initialisation for a deep tower</td><td>Several training runs; little gain with modern optimisers</td><td>Tan 2023 SSDAE (the second S)</td></tr>
+    <tr><td>Variational (VAE)</td><td>Code is a probability distribution; can generate new days</td><td>You want to sample plausible price days, not just compress them</td><td>Blurrier reconstructions</td><td>Not used in the NEM papers; listed for completeness</td></tr>
+  </tbody>
+</table>
+
+<h2 id="tan">7 · How Tan 2023 wires it: CNN → SSDAE → regression, once per frequency component</h2>
+<div class="diagram"><div id="d-tan-pipe"></div><div class="cap">One of the parallel branches in Tan's model (there is one per intrinsic mode function from ICEEMDAN). The autoencoder stack sits between feature extraction and prediction.</div></div>
+<ol class="steps">
+  <li>The CNN slides its filters over the last few days of one IMF and produces feature maps; flattened, that is a vector of a few dozen numbers per day.</li>
+  <li>A stacked sparse denoising autoencoder is pre-trained on those vectors exactly as in sections 3 to 5: corrupted in, clean out, few units on, one layer at a time.</li>
+  <li>The decoders are discarded; a linear (or small dense) regression layer maps the top code to the 48 half-hourly values of tomorrow's IMF.</li>
+  <li>The whole branch is fine-tuned on the day-ahead target; the branches' outputs are summed to give the price forecast.</li>
+</ol>
+<div class="note">The autoencoder is doing three jobs at once in that position: shrinking the CNN's output so the regression has few weights (less overfitting on five years of data), making it insensitive to interval jitter (denoising), and giving the regression a code where each entry is a recognisable pattern (sparse). None of those requires the autoencoder to be a good forecaster itself; it never sees tomorrow until the fine-tuning step.</div>
+
+</main>
+
+<script>
+(function(){
+  'use strict';
+  // ---------------------------------------------------------------- utils
+  function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function fmt(x,d){return (Math.round(x*Math.pow(10,d))/Math.pow(10,d)).toFixed(d);}
+  function rng(seed){var s=seed>>>0;return function(){s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
+  var R=rng(20260921);
+  function randn(){var u=R()||1e-9,v=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function mean(a){return a.reduce(function(s,v){return s+v;},0)/a.length;}
+  function rmse(A,B){var s=0,n=0;for(var i=0;i<A.length;i++)for(var j=0;j<A[i].length;j++){var d=A[i][j]-B[i][j];s+=d*d;n++;}return Math.sqrt(s/n);}
+  function setT(id,t){var e=document.getElementById(id);if(e)e.textContent=t;}
+  function setH(id,h){var e=document.getElementById(id);if(e)e.innerHTML=h;}
+  function tableH(head,rows,bestRow){var s='<table><thead><tr>'+head.map(function(h,i){return '<th'+(i?' class="num"':'')+'>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>';rows.forEach(function(r,ri){s+='<tr'+(ri===bestRow?' class="best"':'')+'>'+r.map(function(c,i){return '<td'+(i?' class="num"':'')+'>'+esc(c)+'</td>';}).join('')+'</tr>';});return s+'</tbody></table>';}
+
+  // ---------------------------------------------------------------- tiny dense net with Adam + optional KL sparsity
+  var ACT={tanh:{f:Math.tanh,d:function(a){return 1-a*a;}},sigmoid:{f:function(z){return 1/(1+Math.exp(-z));},d:function(a){return a*(1-a);}},linear:{f:function(z){return z;},d:function(){return 1;}}};
+  function Net(sizes,acts,scale){this.L=[];for(var i=0;i<sizes.length-1;i++){var W=[],b=[];for(var o=0;o<sizes[i+1];o++){var row=[];for(var k=0;k<sizes[i];k++)row.push(randn()*(scale||1)*Math.sqrt(1/sizes[i]));W.push(row);b.push(0);}this.L.push({W:W,b:b,act:acts[i],mW:zeros2(W),vW:zeros2(W),mb:b.map(function(){return 0;}),vb:b.map(function(){return 0;})});}this.t=0;}
+  function zeros2(W){return W.map(function(r){return r.map(function(){return 0;});});}
+  Net.prototype.forward=function(x){var acts=[x];for(var i=0;i<this.L.length;i++){var l=this.L[i],a=[];for(var o=0;o<l.W.length;o++){var z=l.b[o];for(var k=0;k<l.W[o].length;k++)z+=l.W[o][k]*acts[i][k];a.push(ACT[l.act].f(z));}acts.push(a);}return acts;};
+  Net.prototype.predict=function(x){var a=this.forward(x);return a[a.length-1];};
+  // one full-batch step. X inputs, Y targets; opts: {lr, adam:true/false, sparse:{layer,rho,beta}}
+  Net.prototype.step=function(X,Y,opts){
+    var N=X.length,L=this.L,self=this; var gW=L.map(function(l){return zeros2(l.W);}),gb=L.map(function(l){return l.b.map(function(){return 0;});});
+    var loss=0, actsAll=X.map(function(x){return self.forward(x);});
+    var rhoHat=null; if(opts.sparse){var li=opts.sparse.layer;rhoHat=L[li-1].b.map(function(){return 0;});actsAll.forEach(function(A){A[li].forEach(function(a,j){rhoHat[j]+=a/N;});});}
+    for(var n=0;n<N;n++){var A=actsAll[n],out=A[A.length-1],delta=out.map(function(o,j){var d=o-Y[n][j];loss+=0.5*d*d/N;return d/N;});
+      for(var i=L.length-1;i>=0;i--){var l=L[i],ain=A[i],aout=A[i+1];var dz=delta.map(function(d,o){return d*ACT[l.act].d(aout[o]);});
+        for(var o=0;o<l.W.length;o++){gb[i][o]+=dz[o];for(var k=0;k<l.W[o].length;k++)gW[i][o][k]+=dz[o]*ain[k];}
+        if(i>0){var prev=[];for(var k2=0;k2<ain.length;k2++){var s=0;for(var o2=0;o2<l.W.length;o2++)s+=l.W[o2][k2]*dz[o2];prev.push(s);}
+          if(opts.sparse&&i===opts.sparse.layer){var rho=opts.sparse.rho,beta=opts.sparse.beta;prev=prev.map(function(p,j){return p+beta*(-rho/rhoHat[j]+(1-rho)/(1-rhoHat[j]))/N;});}
+          delta=prev;}
+      }}
+    if(opts.sparse){var rho2=opts.sparse.rho;rhoHat.forEach(function(rh){loss+=opts.sparse.beta*(rho2*Math.log(rho2/rh)+(1-rho2)*Math.log((1-rho2)/(1-rh)));});}
+    this.t++;var lr=opts.lr,b1=0.9,b2=0.999,eps=1e-8,t=this.t;
+    for(var i2=0;i2<L.length;i2++){var l2=L[i2];for(var o3=0;o3<l2.W.length;o3++){for(var k3=0;k3<l2.W[o3].length;k3++){var g=gW[i2][o3][k3];if(opts.adam){l2.mW[o3][k3]=b1*l2.mW[o3][k3]+(1-b1)*g;l2.vW[o3][k3]=b2*l2.vW[o3][k3]+(1-b2)*g*g;var mh=l2.mW[o3][k3]/(1-Math.pow(b1,t)),vh=l2.vW[o3][k3]/(1-Math.pow(b2,t));l2.W[o3][k3]-=lr*mh/(Math.sqrt(vh)+eps);}else l2.W[o3][k3]-=lr*g;}
+        var gbv=gb[i2][o3];if(opts.adam){l2.mb[o3]=b1*l2.mb[o3]+(1-b1)*gbv;l2.vb[o3]=b2*l2.vb[o3]+(1-b2)*gbv*gbv;var mhb=l2.mb[o3]/(1-Math.pow(b1,t)),vhb=l2.vb[o3]/(1-Math.pow(b2,t));l2.b[o3]-=lr*mhb/(Math.sqrt(vhb)+eps);}else l2.b[o3]-=lr*gbv;}}
+    return loss;};
+  function train(net,X,Y,steps,opts,onStep){var hist=[];for(var s=0;s<steps;s++){var l=net.step(X,Y,opts);if(onStep)hist.push(onStep(s,l));}return hist;}
+  function encode(net,x,nEnc){var a=net.forward(x);return a[nEnc];}
+
+  // ---------------------------------------------------------------- data
+  var PP=[0,0,0,0,0,0.3,1,0.4], MP=[0,0.2,1,0.5,0,0,0,0], DIP=[0,0,0,0.5,1,0.5,0,0], SLOTS=['00','03','06','09','12','15','18','21'];
+  function makeDay(){var level=0.4+0.8*R(),peak=2.5*R(),morning=0.3*R();var x=[];for(var i=0;i<8;i++)x.push(level*(1-0.15*DIP[i])+peak*PP[i]+morning*MP[i]+0.03*randn());return {x:x,level:level,peak:peak,morning:morning,tomorrowPeak:0.7*peak+0.3*level+0.15*randn()};}
+  var DAYS=[];for(var i=0;i<240;i++)DAYS.push(makeDay());var TR=DAYS.slice(0,200),TE=DAYS.slice(200);var Xtr=TR.map(function(d){return d.x;}),Xte=TE.map(function(d){return d.x;});
+  function corrupt(x){var c=x.map(function(v){return v+0.12*randn();});if(R()<0.3){var j=Math.floor(R()*8);c[j]+=0.8*R();}return c;}
+
+  // ---------------------------------------------------------------- drawing helpers
+  function svgWrap(id,w,h,body){setH(id,'<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;display:block;margin:4px auto">'+body+'</svg>');}
+  function txt(x,y,t,cls,anchor,extra){return '<text x="'+x+'" y="'+y+'" class="'+(cls||'ts')+'" text-anchor="'+(anchor||'start')+'" '+(extra||'')+'>'+esc(t)+'</text>';}
+  function line(pts,x0,y0,dx,sy,stroke,w,dash){var d=pts.map(function(v,i){return (i?'L':'M')+(x0+i*dx)+' '+(y0-v*sy);}).join(' ');return '<path d="'+d+'" fill="none" stroke="'+stroke+'" stroke-width="'+(w||1.6)+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';}
+  function dayPanel(x0,y0,w,h,series,labels){ // series: [{v:[8], col, dash, w}], values in $ (0..400)
+    var s='<rect x="'+x0+'" y="'+y0+'" width="'+w+'" height="'+h+'" fill="#fff" stroke="#e5e7eb" rx="6"/>';var dx=(w-16)/7,sy=(h-24)/4.0;
+    series.forEach(function(se){s+=line(se.v.map(function(v){return v/100;}),x0+8,y0+h-14,dx,sy,se.col,se.w||1.6,se.dash);});
+    if(labels)SLOTS.forEach(function(l,i){if(i%2===0)s+=txt(x0+8+i*dx,y0+h-3,l,'ts','middle');});
+    return s;}
+  function lossCurve(id,hists,names,cols,ylabel,w,h){w=w||480;h=h||190;var x0=44,y0=h-30,pw=w-x0-16,ph=y0-14;var n=hists[0].length;var mx=Math.max.apply(null,hists.map(function(hh){return Math.max.apply(null,hh);}));mx=Math.min(mx,Math.max.apply(null,hists.map(function(hh){return hh[Math.floor(n*0.02)];}))*1.05);var b='';
+    b+='<line x1="'+x0+'" y1="'+y0+'" x2="'+(x0+pw)+'" y2="'+y0+'" stroke="#9ca3af"/><line x1="'+x0+'" y1="'+y0+'" x2="'+x0+'" y2="14" stroke="#9ca3af"/>';
+    hists.forEach(function(hh,k){var d=hh.map(function(v,i){return (i?'L':'M')+(x0+i*pw/(n-1))+' '+(y0-Math.min(v,mx)/mx*ph);}).join(' ');b+='<path d="'+d+'" fill="none" stroke="'+cols[k]+'" stroke-width="1.8"/>';b+=txt(x0+pw-4,24+k*14,names[k]+' (final '+fmt(hh[n-1],1)+')','ts','end','fill="'+cols[k]+'"');});
+    b+=txt(x0-4,18,fmt(mx,0),'ts','end');b+=txt(x0-4,y0+4,'0','ts','end');b+=txt(x0+pw/2,h-6,'training steps → ('+n+')','ts','middle');b+=txt(12,y0/2,ylabel,'ts','middle','transform="rotate(-90 12 '+(y0/2)+')"');
+    svgWrap(id,w,h,b);}
+
+  // ---------------------------------------------------------------- static diagrams
+  (function(){var b='',xs=[40,200,360],ns=[8,2,8];ns.forEach(function(n,li){for(var i=0;i<n;i++){var y=100+(i-(n-1)/2)*18;if(li<2)for(var j=0;j<ns[li+1];j++){var y2=100+(j-(ns[li+1]-1)/2)*18;b+='<line x1="'+xs[li]+'" y1="'+y+'" x2="'+xs[li+1]+'" y2="'+y2+'" stroke="#e5e7eb"/>';}}});
+    ns.forEach(function(n,li){for(var i=0;i<n;i++){var y=100+(i-(n-1)/2)*18;b+='<circle cx="'+xs[li]+'" cy="'+y+'" r="6" fill="'+(li===1?'#6d5bd0':'#c4b5fd')+'"/>';if(li!==1)b+=txt(xs[li]+(li===0?-12:12),y+4,SLOTS[i]+':00','ts',li===0?'end':'start');}});
+    b+=txt(40,18,'input day (8 prices)','ti','start');b+=txt(200,18,'code (2 numbers)','ti','middle','fill="#5b21b6"');b+=txt(360,18,'rebuilt day (8 prices)','ti','end');b+=txt(120,190,'encoder: 8→2, tanh','ts','middle');b+=txt(280,190,'decoder: 2→8, linear','ts','middle');
+    svgWrap('d-ae-shape',420,200,b);})();
+  (function(){var b='';for(var i=0;i<12;i++){var d=DAYS[i*17%240];var x0=10+(i%6)*88,y0=10+Math.floor(i/6)*100;b+=dayPanel(x0,y0,82,90,[{v:d.x.map(function(v){return v*100;}),col:'#1f2937'}],i>=6);}svgWrap('d-data',540,210,b);})();
+
+  // ---------------------------------------------------------------- run everything (async chunks so the page paints)
+  var jobs=[];function job(f){jobs.push(f);}function runJobs(){if(!jobs.length){setT('status','all models trained.');return;}var f=jobs.shift();setTimeout(function(){f();runJobs();},10);}
+  var plain, XteRecon;
+
+  job(function(){ // PLAIN 8-2-8
+    setT('status','training the plain 8→2→8 autoencoder…');
+    plain=new Net([8,2,8],['tanh','linear']);var hist=train(plain,Xtr,Xtr,1200,{lr:0.02,adam:true},function(s){return 100*rmse(Xtr,Xtr.map(function(x){return plain.predict(x);}));});
+    lossCurve('d-loss-plain',[hist],['8→2→8'],['#6d5bd0'],'RMSE (A$/MWh)');
+    XteRecon=Xte.map(function(x){return plain.predict(x);});var r=100*rmse(Xte,XteRecon);setT('v-plain-rmse',fmt(r,1));
+    var meanDay=[];for(var j=0;j<8;j++)meanDay.push(mean(Xtr.map(function(x){return x[j];})));setT('v-mean-rmse',fmt(100*rmse(Xte,Xte.map(function(){return meanDay;})),1));
+    var b='';for(var i=0;i<6;i++){var x0=10+i*88;b+=dayPanel(x0,10,82,100,[{v:Xte[i].map(function(v){return v*100;}),col:'#9ca3af',w:2},{v:XteRecon[i].map(function(v){return v*100;}),col:'#6d5bd0'}],true);b+=txt(x0+41,124,'err '+fmt(100*rmse([Xte[i]],[XteRecon[i]]),0),'ts','middle');}svgWrap('d-recon-plain',540,132,b);
+    // dials
+    function dec(z){var a=[z];for(var i=1;i<plain.L.length;i++){var l=plain.L[i],out=[];for(var o=0;o<l.W.length;o++){var s=l.b[o];for(var k=0;k<l.W[o].length;k++)s+=l.W[o][k]*a[a.length-1][k];out.push(ACT[l.act].f(s));}a.push(out);}return a[a.length-1];}
+    ['d-dial1','d-dial2'].forEach(function(id,di){var series=[];[-1,-0.5,0,0.5,1].forEach(function(v,k){var z=[0,0];z[di]=v;series.push({v:dec(z).map(function(q){return q*100;}),col:'rgba(109,91,208,'+(0.25+0.18*k)+')',w:1.8});});svgWrap(id,260,150,dayPanel(10,8,240,132,series,true));});
+    var codes=Xtr.map(function(x){return encode(plain,x,1);});var b2='',cx=40,cy=210,sc=85;b2+='<line x1="'+cx+'" y1="'+(cy)+'" x2="'+(cx+2*sc)+'" y2="'+cy+'" stroke="#9ca3af"/><line x1="'+cx+'" y1="'+cy+'" x2="'+cx+'" y2="'+(cy-2*sc)+'" stroke="#9ca3af"/>';
+    codes.forEach(function(c,i){var d=TR[i];var col='rgba('+Math.round(40+80*d.peak)+','+Math.round(60-20*d.peak)+','+Math.round(200-70*d.peak)+',0.75)';b2+='<circle cx="'+(cx+(c[0]+1)*sc)+'" cy="'+(cy-(c[1]+1)*sc)+'" r="'+(2+3*d.level)+'" fill="'+col+'"/>';});
+    b2+=txt(cx+sc,cy+16,'code 1 (−1 … +1)','ts','middle');b2+=txt(14,cy-sc,'code 2','ts','middle','transform="rotate(-90 14 '+(cy-sc)+')"');b2+=txt(cx+2*sc+14,cy-2*sc+10,'colour: dark blue = no peak → red = A$250 peak','ts');b2+=txt(cx+2*sc+14,cy-2*sc+26,'size: base level','ts');
+    svgWrap('d-code-scatter',520,240,b2);
+    // dial text: correlate each code with the factors
+    function corrF(a,b){var ma=mean(a),mb=mean(b),n=0,da=0,db=0;for(var i=0;i<a.length;i++){n+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)*(a[i]-ma);db+=(b[i]-mb)*(b[i]-mb);}return n/Math.sqrt(da*db);}
+    var c1=codes.map(function(c){return c[0];}),c2=codes.map(function(c){return c[1];}),pk=TR.map(function(d){return d.peak;}),lv=TR.map(function(d){return d.level;});
+    setT('v-dial-text','On this run, code 1 correlates '+fmt(corrF(c1,pk),2)+' with the true peak height and '+fmt(corrF(c1,lv),2)+' with the base level; code 2 correlates '+fmt(corrF(c2,pk),2)+' with the peak and '+fmt(corrF(c2,lv),2)+' with the level.');
+  });
+  job(function(){ // BOTTLENECK SIZES
+    setT('status','training bottlenecks of width 1, 2, 3, 4…');var rows=[],best=0,bestv=1e9;[1,2,3,4].forEach(function(k,i){var n=new Net([8,k,8],['tanh','linear']);train(n,Xtr,Xtr,900,{lr:0.02,adam:true});var tr=100*rmse(Xtr,Xtr.map(function(x){return n.predict(x);})),te=100*rmse(Xte,Xte.map(function(x){return n.predict(x);}));rows.push(['8 → '+k+' → 8',fmt(tr,1),fmt(te,1),k===1?'level and peak collapse onto one axis':k===2?'the two real dials':k===3?'third unit picks up the morning bump':'starts fitting noise; test barely improves']);if(te<bestv){bestv=te;best=i;}});
+    setH('t-bottleneck',tableH(['Bottleneck','Train RMSE (A$)','Test RMSE (A$)','What the extra unit buys'],rows,best));});
+  job(function(){ // DENOISING
+    setT('status','training the denoising autoencoder…');var dae=new Net([8,2,8],['tanh','linear']);
+    for(var s=0;s<1200;s++){var Xc=Xtr.map(corrupt);dae.step(Xc,Xtr,{lr:0.02,adam:true});}
+    var XteC=Xte.map(corrupt);var pC=100*rmse(Xte,XteC.map(function(x){return plain.predict(x);})),dC=100*rmse(Xte,XteC.map(function(x){return dae.predict(x);})),pK=100*rmse(Xte,Xte.map(function(x){return plain.predict(x);})),dK=100*rmse(Xte,Xte.map(function(x){return dae.predict(x);})),raw=100*rmse(Xte,XteC);
+    setH('t-denoise',tableH(['Input given to the model','Plain AE error vs clean truth (A$)','Denoising AE error vs clean truth (A$)','Doing nothing (error of the input itself)'],[['clean test days',fmt(pK,1),fmt(dK,1),'0.0'],['corrupted test days',fmt(pC,1),fmt(dC,1),fmt(raw,1)]],1));
+    setT('v-dae-text','gets the corrupted days back to within A$'+fmt(dC,1)+' of the truth versus A$'+fmt(pC,1)+' for the plain one (the corrupted input itself is A$'+fmt(raw,1)+' off)');
+    var i=0,xc=XteC[i];var b=dayPanel(10,10,300,190,[{v:Xte[i].map(function(v){return v*100;}),col:'#9ca3af',w:2.4},{v:xc.map(function(v){return v*100;}),col:'#b91c1c',w:1.4},{v:plain.predict(xc).map(function(v){return v*100;}),col:'#6d5bd0',dash:'5 3',w:1.8},{v:dae.predict(xc).map(function(v){return v*100;}),col:'#15803d',w:2}],true);
+    b+=txt(330,40,'grey: true day','ts');b+=txt(330,58,'red: corrupted input','ts','start','fill="#b91c1c"');b+=txt(330,76,'dashed purple: plain AE output','ts','start','fill="#5b21b6"');b+=txt(330,94,'green: denoising AE output','ts','start','fill="#166534"');svgWrap('d-corrupt',540,210,b);});
+  job(function(){ // SPARSE
+    setT('status','training the sparse autoencoder…');var noP=new Net([8,12,8],['sigmoid','linear']),sp=new Net([8,12,8],['sigmoid','linear']);
+    train(noP,Xtr,Xtr,1200,{lr:0.02,adam:true});train(sp,Xtr,Xtr,1200,{lr:0.02,adam:true,sparse:{layer:1,rho:0.1,beta:0.3}});
+    var mNo=[],mSp=[];for(var j=0;j<12;j++){mNo.push(mean(Xtr.map(function(x){return encode(noP,x,1)[j];})));mSp.push(mean(Xtr.map(function(x){return encode(sp,x,1)[j];})));}
+    var b='',x0=30,y0=150,bw=14;for(var j2=0;j2<12;j2++){var x=x0+j2*32;b+='<rect x="'+x+'" y="'+(y0-mNo[j2]*120)+'" width="'+bw+'" height="'+(mNo[j2]*120)+'" fill="#9ca3af"/><rect x="'+(x+bw)+'" y="'+(y0-mSp[j2]*120)+'" width="'+bw+'" height="'+(mSp[j2]*120)+'" fill="#6d5bd0"/>';b+=txt(x+bw,y0+12,'u'+(j2+1),'ts','middle');}
+    b+='<line x1="'+x0+'" y1="'+(y0-0.1*120)+'" x2="'+(x0+12*32)+'" y2="'+(y0-0.1*120)+'" stroke="#d97706" stroke-dasharray="4 3"/>';b+=txt(x0+12*32,y0-0.1*120-4,'ρ = 0.1','ts','end','fill="#92400e"');b+=txt(x0,16,'mean activation (0 … 1)','ts');svgWrap('d-sparse-mean',430,170,b);
+    var b2='',cw=24;for(var r=0;r<10;r++){var a=encode(sp,Xte[r],1);for(var c=0;c<12;c++){b2+='<rect x="'+(40+c*cw)+'" y="'+(20+r*cw)+'" width="'+cw+'" height="'+cw+'" fill="rgba(109,91,208,'+(0.05+0.95*a[c])+')" stroke="#fff"/>';}b2+=txt(36,20+r*cw+16,'day '+(r+1),'ts','end');}for(var c2=0;c2<12;c2++)b2+=txt(40+c2*cw+cw/2,14,'u'+(c2+1),'ts','middle');svgWrap('d-sparse-heat',340,270,b2);
+    var eNo=100*rmse(Xte,Xte.map(function(x){return noP.predict(x);})),eSp=100*rmse(Xte,Xte.map(function(x){return sp.predict(x);}));var onNo=mean(Xte.map(function(x){return encode(noP,x,1).filter(function(a){return a>0.25;}).length;})),onSp=mean(Xte.map(function(x){return encode(sp,x,1).filter(function(a){return a>0.25;}).length;}));
+    setH('t-sparse',tableH(['8 → 12 → 8','Test RMSE (A$)','Units above 0.25 per day (of 12)','Mean activation over all units'],[['no penalty',fmt(eNo,1),fmt(onNo,1),fmt(mean(mNo),2)],['KL sparsity, ρ = 0.1, β = 0.3',fmt(eSp,1),fmt(onSp,1),fmt(mean(mSp),2)]],1));
+    setT('v-sparse-text','test RMSE A$'+fmt(eSp,1)+' with the penalty versus A$'+fmt(eNo,1)+' without, and on average '+fmt(onSp,1)+' units above 0.25 per day instead of '+fmt(onNo,1));
+    var order=mSp.map(function(m,j){return [m,j];}).sort(function(a,b){return b[0]-a[0];}).slice(0,3);var b3='';order.forEach(function(o,k){var j=o[1];var col=sp.L[1].W.map(function(row){return row[j]*100;});var base=sp.L[1].b.map(function(v){return v*100;});b3+=dayPanel(10+k*176,10,166,130,[{v:base,col:'#d1d5db',w:1.4},{v:base.map(function(v,i){return v+col[i];}),col:'#6d5bd0',w:2}],true);b3+=txt(10+k*176+83,152,'unit '+(j+1)+' switched on (grey = nothing on)','ts','middle');});svgWrap('d-sparse-atoms',540,160,b3);});
+  job(function(){ // STACKED
+    setT('status','pre-training the stack and comparing with training from scratch…');
+    flowDiagram('d-stack',[{t:'day (8)',k:'input'},{t:'AE1: 8→4→8',s:['keep encoder E1'],k:'model'},{t:'AE2: 4→2→4',s:['on E1 codes; keep E2'],k:'model'},{t:'E1 → E2 → linear',s:['fine-tune all on target'],k:'model'},{t:"tomorrow's peak",k:'out'}]);
+    var Ytr=TR.map(function(d){return [d.tomorrowPeak];}),Yte=TE.map(function(d){return [d.tomorrowPeak];});
+    function run(actName,opts,steps){
+      // pre-train
+      var ae1=new Net([8,4,8],[actName,'linear']);train(ae1,Xtr,Xtr,600,{lr:opts.adam?0.02:0.5,adam:opts.adam});var C1tr=Xtr.map(function(x){return encode(ae1,x,1);});
+      var ae2=new Net([4,2,4],[actName,'linear']);train(ae2,C1tr,C1tr,600,{lr:opts.adam?0.02:0.5,adam:opts.adam});
+      var pre=new Net([8,4,2,1],[actName,actName,'linear']);pre.L[0].W=ae1.L[0].W.map(function(r){return r.slice();});pre.L[0].b=ae1.L[0].b.slice();pre.L[1].W=ae2.L[0].W.map(function(r){return r.slice();});pre.L[1].b=ae2.L[0].b.slice();
+      var scratch=new Net([8,4,2,1],[actName,actName,'linear']);
+      var hp=train(pre,Xtr,Ytr,steps,opts,function(){return 100*rmse(Yte,Xte.map(function(x){return pre.predict(x);}));});var hs=train(scratch,Xtr,Ytr,steps,opts,function(){return 100*rmse(Yte,Xte.map(function(x){return scratch.predict(x);}));});
+      return {hp:hp,hs:hs};}
+    var sgd=run('sigmoid',{lr:0.5,adam:false},1500),adam=run('tanh',{lr:0.01,adam:true},600);
+    lossCurve('d-stack-sgd',[sgd.hs,sgd.hp],['from scratch','pre-trained stack'],['#9ca3af','#6d5bd0'],'validation RMSE (A$)');lossCurve('d-stack-adam',[adam.hs,adam.hp],['from scratch','pre-trained stack'],['#9ca3af','#6d5bd0'],'validation RMSE (A$)');
+    function stepsTo(h,thr){for(var i=0;i<h.length;i++)if(h[i]<=thr)return i;return '> '+h.length;}
+    var thrS=Math.max(sgd.hp[sgd.hp.length-1],sgd.hs[sgd.hs.length-1])*1.15,thrA=Math.max(adam.hp[adam.hp.length-1],adam.hs[adam.hs.length-1])*1.15;
+    setH('t-stack',tableH(['Setting','Final RMSE, from scratch (A$)','Final RMSE, pre-trained (A$)','Steps to reach within 15 % of final: scratch','… pre-trained'],[['plain SGD, sigmoid',fmt(sgd.hs[sgd.hs.length-1],1),fmt(sgd.hp[sgd.hp.length-1],1),String(stepsTo(sgd.hs,thrS)),String(stepsTo(sgd.hp,thrS))],['Adam, tanh',fmt(adam.hs[adam.hs.length-1],1),fmt(adam.hp[adam.hp.length-1],1),String(stepsTo(adam.hs,thrA)),String(stepsTo(adam.hp,thrA))]]));
+    var gainS=sgd.hs[sgd.hs.length-1]-sgd.hp[sgd.hp.length-1],gainA=adam.hs[adam.hs.length-1]-adam.hp[adam.hp.length-1];
+    var sS=stepsTo(sgd.hs,thrS),sP=stepsTo(sgd.hp,thrS);setT('v-stack-text','With plain gradient descent the pre-trained stack finished '+(gainS>0?'A$'+fmt(gainS,1)+' better':'A$'+fmt(-gainS,1)+' worse')+' than training from scratch and '+(typeof sP==='number'&&typeof sS==='number'&&sP<sS?'got close to its final error in '+sP+' steps instead of '+sS:'did not converge sooner')+'; with Adam the difference was '+(Math.abs(gainA)<0.5?'negligible':(gainA>0?'A$'+fmt(gainA,1)+' in favour of pre-training':'A$'+fmt(-gainA,1)+' in favour of scratch'))+'.');});
+  job(function(){ flowDiagram('d-tan-pipe',[{t:'one IMF, last few days',k:'input'},{t:'CNN',s:['filters → feature maps','→ flatten'],k:'model'},{t:'SSDAE',s:['stacked, sparse, denoising','pre-trained, decoders dropped'],k:'model'},{t:'regression layer',s:['code → 48 half-hours'],k:'model'},{t:"tomorrow's IMF",s:['summed with other branches'],k:'out'}]); });
+
+  function flowDiagram(id,steps){var W=150,H=58,GAP=36,PAD=10,n=steps.length,tw=n*W+(n-1)*GAP+2*PAD,th=H+2*PAD;var s='<svg viewBox="0 0 '+tw+' '+th+'" width="'+tw+'" height="'+th+'" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto"><defs><marker id="ah'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>';
+    steps.forEach(function(st,i){var x=PAD+i*(W+GAP);s+='<rect x="'+x+'" y="'+PAD+'" width="'+W+'" height="'+H+'" rx="8" class="box-'+(st.k||'model')+'" stroke="rgba(0,0,0,.18)"/>'+txt(x+W/2,PAD+18,st.t,'ti','middle');(st.s||[]).forEach(function(l,j){s+=txt(x+W/2,PAD+32+j*13,l,'ts','middle');});if(i<n-1)s+='<path d="M'+(x+W)+' '+(PAD+H/2)+' L'+(x+W+GAP-2)+' '+(PAD+H/2)+'" stroke="#6b7280" stroke-width="1.4" marker-end="url(#ah'+id+')"/>';});
+    setH(id,s+'</svg>');}
+  runJobs();
+})();
+</script>
+</body>
+</html>

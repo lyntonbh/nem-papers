@@ -78,6 +78,7 @@
   <div class="ex"><div class="exh">Worked example</div>
     Input: the 6-row series with noise added, <span data-v="ae.noisy"></span>. Target: the clean series <span data-v="ae.clean"></span>. A 6→2→6 autoencoder cannot store six numbers in two, so it learns something like (level, peak-height) and reconstructs a smoothed evening shape; the noise is what it drops. In Tan 2023 the CNN's feature maps go through a stacked sparse denoising autoencoder and the top layer regresses tomorrow's price from the compressed features.
   </div>
+  <p><a class="btn" href="autoencoders.html">Companion page: autoencoders trained live in your browser, with the plain, denoising, sparse and stacked variants compared on the same data →</a></p>
   <div class="note confuse"><b>Common confusion.</b> "Encoder" in "autoencoder" and "encoder" in "transformer encoder" are different things. The first compresses to a bottleneck; the second is a stack of attention layers that keeps the sequence length.</div>
 </div>
 

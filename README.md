@@ -2,6 +2,7 @@
 
 - `index.html` — the directory of NEM spot-price deep-learning papers (Tan 2023 → Sinclair 2026) with every concept explained visually and with live worked examples.
 - `rnn_explainer.html` — companion: LSTM, GRU and TCN worked numerically.
+- `autoencoders.html` — companion: plain, denoising, sparse and stacked autoencoders trained live in the browser.
 - `src/` — the report is built by concatenating `src/01_head.html` … `src/07_scripts.html` in order into `index.html`. Edit a part, then rebuild:
 
 ```
